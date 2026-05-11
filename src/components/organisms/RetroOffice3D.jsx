@@ -197,6 +197,20 @@ function OfficeScene({ agents, onAgentClick, selectedAgentId, cameraPreset, show
   const deskPositions = useMemo(() => assignDeskPositions(agents), [agents]);
   const pois = useMemo(() => buildPOIs(VENTURES), []);
 
+  // Build a static obstacle list: every desk + whiteboard + coffee + global POIs.
+  // Used for soft repulsion so agents don't clip through furniture.
+  const obstacles = useMemo(() => {
+    const list = [];
+    Object.values(deskPositions).forEach(d => list.push({ x: d.x, z: d.z }));
+    Object.values(pois.byVenture).forEach(p => {
+      list.push({ x: p.whiteboard.x, z: p.whiteboard.z });
+      list.push({ x: p.coffee.x,     z: p.coffee.z });
+    });
+    list.push({ x: pois.global.meetingTable.x, z: pois.global.meetingTable.z });
+    list.push({ x: pois.global.waterCooler.x,  z: pois.global.waterCooler.z });
+    return list;
+  }, [deskPositions, pois]);
+
   // Agent tick system for movement behaviors
   const agentStates = useAgentTick(agents, deskPositions, pois);
 
@@ -220,6 +234,12 @@ function OfficeScene({ agents, onAgentClick, selectedAgentId, cameraPreset, show
         const state = agentStates[agent.id];
         if (!state) return null;
 
+        // Each agent's obstacles = all obstacles except its own desk
+        const myDesk = deskPositions[agent.id];
+        const agentObstacles = myDesk
+          ? obstacles.filter(o => !(o.x === myDesk.x && o.z === myDesk.z))
+          : obstacles;
+
         return (
           <AgentAvatar
             key={agent.id}
@@ -228,6 +248,7 @@ function OfficeScene({ agents, onAgentClick, selectedAgentId, cameraPreset, show
             targetPosition={state.targetPosition}
             behavior={state.behavior}
             talkPartnerId={state.talkPartner}
+            obstacles={agentObstacles}
             onClick={onAgentClick}
             isSelected={agent.id === selectedAgentId}
           />

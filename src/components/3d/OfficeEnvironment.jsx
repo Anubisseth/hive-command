@@ -4,8 +4,10 @@
 // Tactical cyberpunk atmosphere
 // =============================================
 
-import { useRef } from 'react';
+import { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
+import { VENTURES } from '../../data/constants';
+import { buildVentureZones } from '../../lib/pathfinding';
 
 /**
  * Ambient particles floating in the office
@@ -56,6 +58,27 @@ function DataParticles({ count = 80 }) {
         sizeAttenuation
       />
     </points>
+  );
+}
+
+/**
+ * Auto-distributed venture zone accent lights — adapts to whatever ventures
+ * the operator configured in src/data/constants.js.
+ */
+function VentureZoneLights() {
+  const zones = useMemo(() => buildVentureZones(VENTURES), []);
+  return (
+    <>
+      {Object.entries(zones).filter(([k]) => k !== 'cross').map(([key, zone]) => (
+        <pointLight
+          key={`zone-light-${key}`}
+          position={[zone.cx, 4, zone.cz]}
+          intensity={1.8}
+          color={VENTURES[key]?.color || '#8B5CF6'}
+          distance={12}
+        />
+      ))}
+    </>
   );
 }
 
@@ -133,13 +156,15 @@ export default function OfficeEnvironment() {
         castShadow={false}
       />
 
-      {/* Venture zone accent lights — bright */}
-      <pointLight position={[-6, 4, -4]} intensity={2.0} color="#3B82F6" distance={14} /> {/* OF zone */}
-      <pointLight position={[6, 4, -4]} intensity={2.0} color="#C7D2FE" distance={14} />  {/* SYN zone */}
-      <pointLight position={[0, 4, -6]} intensity={2.0} color="#10B981" distance={14} />   {/* NUT zone */}
-      <pointLight position={[0, 4, 6]} intensity={2.0} color="#06B6D4" distance={14} />    {/* JET zone */}
-      <pointLight position={[-6, 4, 4]} intensity={2.0} color="#1E40AF" distance={14} />   {/* CHK zone */}
-      <pointLight position={[6, 4, 4]} intensity={2.0} color="#D97706" distance={14} />    {/* TEN zone */}
+      {/* Venture zone accent lights — auto-distributed from VENTURES */}
+      <VentureZoneLights />
+
+      {/* Rim light from behind for silhouette pop */}
+      <directionalLight
+        position={[0, 5, -15]}
+        intensity={0.7}
+        color="#00D4FF"
+      />
 
       {/* Fog for depth — far enough to see whole office */}
       <fog attach="fog" args={['#080C14', 30, 55]} />

@@ -8,6 +8,7 @@
 const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
 const OPENAI_KEY = process.env.OPENAI_API_KEY;
+const GEMINI_KEY = process.env.GEMINI_API_KEY;
 
 function authenticate(req) {
   const token = req.headers['x-hive-token'];
@@ -31,6 +32,78 @@ export default async function handler(req, res) {
 
   try {
     const { provider, action, messages, prompt, options = {} } = req.body;
+
+    // ─── Image Generation ───────────────────────────
+    // Tries Gemini Nano-Banana first (if configured), falls back to OpenAI DALL-E 3.
+    // Returns { provider, content: <url>, model, usage }
+    if (action === 'generateImage') {
+      if (!prompt) return res.status(400).json({ error: 'prompt required for generateImage' });
+
+      // Gemini 2.5 Flash Image (Nano Banana)
+      if ((provider === 'gemini' || !provider) && GEMINI_KEY) {
+        try {
+          const model = options.model || 'gemini-2.5-flash-image';
+          const geminiRes = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_KEY}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                generationConfig: { responseModalities: ['IMAGE'] },
+              }),
+              signal: AbortSignal.timeout(60000),
+            }
+          );
+          if (geminiRes.ok) {
+            const data = await geminiRes.json();
+            const img = data.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData;
+            if (img?.data) {
+              return res.status(200).json({
+                provider: 'gemini',
+                model,
+                content: `data:${img.mimeType || 'image/png'};base64,${img.data}`,
+                usage: { inputTokens: data.usageMetadata?.promptTokenCount || 0, outputTokens: data.usageMetadata?.candidatesTokenCount || 0 },
+              });
+            }
+          }
+          // Otherwise fall through to OpenAI
+        } catch (err) {
+          if (err.name === 'AbortError') return res.status(504).json({ error: 'Gemini image timeout' });
+          // Fall through
+        }
+      }
+
+      // OpenAI DALL-E 3 fallback
+      if (OPENAI_KEY) {
+        const openaiRes = await fetch('https://api.openai.com/v1/images/generations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENAI_KEY}` },
+          body: JSON.stringify({
+            model: 'dall-e-3',
+            prompt,
+            n: 1,
+            size: options.size || '1024x1024',
+            quality: options.quality || 'standard',
+          }),
+          signal: AbortSignal.timeout(60000),
+        });
+        if (!openaiRes.ok) {
+          const err = await openaiRes.text().catch(() => '');
+          return res.status(openaiRes.status).json({ error: `OpenAI image ${openaiRes.status}: ${err}` });
+        }
+        const data = await openaiRes.json();
+        return res.status(200).json({
+          provider: 'openai',
+          model: 'dall-e-3',
+          content: data.data?.[0]?.url || '',
+          // DALL-E 3 doesn't return token usage — we estimate based on size tier
+          usage: { inputTokens: 0, outputTokens: 0 },
+        });
+      }
+
+      return res.status(400).json({ error: 'No image provider configured. Set GEMINI_API_KEY or OPENAI_API_KEY on the server.' });
+    }
 
     // ─── Ollama ───────────────────────────
     if (provider === 'ollama' || (!provider && !ANTHROPIC_KEY && !OPENAI_KEY)) {

@@ -165,6 +165,46 @@ async function callProvider({ system, messages, prompt, options, signal, provide
 }
 
 /**
+ * Generate an image from a text prompt.
+ * Routes to Gemini (Nano Banana) if configured server-side, else OpenAI DALL-E 3.
+ * Returns { provider, content (image URL or data:URI), model }
+ */
+export async function generateImage({ prompt, options = {}, signal, agentId, agentName }) {
+  if (!prompt) throw new Error('prompt is required');
+
+  const res = await fetch('/api/ai', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Hive-Token': import.meta.env.VITE_HIVE_ACCESS_TOKEN || '' },
+    body: JSON.stringify({
+      action: 'generateImage',
+      prompt,
+      options: { size: options.size || '1024x1024', quality: options.quality, model: options.model },
+    }),
+    signal,
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`Image generation failed (${res.status}): ${body}`);
+  }
+
+  const data = await res.json();
+  if (data.usage) {
+    recordUsageToStore({
+      agentId: agentId || null,
+      agentName: agentName || null,
+      provider: data.provider,
+      model: data.model,
+      inputTokens: data.usage.inputTokens,
+      outputTokens: data.usage.outputTokens,
+      cost: 0, // Image cost varies; not pricing per-call here. User sees the bill on their provider dashboard.
+      timestamp: Date.now(),
+    });
+  }
+  return { content: data.content, provider: data.provider, model: data.model };
+}
+
+/**
  * Extract JSON from an LLM response that may contain markdown code blocks.
  */
 export function extractJSON(text) {

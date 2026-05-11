@@ -35,12 +35,15 @@ export default function AgentAvatar({
   targetPosition = null,
   behavior = 'idle',
   talkPartnerId = null,
+  obstacles = [],
   onClick,
   isSelected = false,
 }) {
   const groupRef = useRef();
   const bodyRef = useRef();
   const headRef = useRef();
+  const dustRefs = useRef([useRef(), useRef(), useRef()]);
+  const lastFootstepTime = useRef(0);
   const [hovered, setHovered] = useState(false);
   const [dialogue, setDialogue] = useState(null);
   const pointerDownPos = useRef(null);
@@ -152,11 +155,29 @@ export default function AgentAvatar({
       }
     }
 
-    // ─── Move toward target ─────────────────────────────
+    // ─── Move toward target with soft obstacle repulsion ────
     if (targetPosition) {
       const current = groupRef.current.position;
-      const dx = targetPosition[0] - current.x;
-      const dz = targetPosition[2] - current.z;
+      let dx = targetPosition[0] - current.x;
+      let dz = targetPosition[2] - current.z;
+
+      // Apply soft repulsion from any nearby obstacle (NavMesh-light).
+      // We add a perpendicular push when within `repulsionRadius`.
+      const repulsionRadius = 0.9;
+      let repelX = 0, repelZ = 0;
+      for (const o of obstacles) {
+        const odx = current.x - o.x;
+        const odz = current.z - o.z;
+        const od = Math.hypot(odx, odz);
+        if (od > 0 && od < repulsionRadius) {
+          const strength = (repulsionRadius - od) / repulsionRadius;
+          repelX += (odx / od) * strength * 1.5;
+          repelZ += (odz / od) * strength * 1.5;
+        }
+      }
+      dx += repelX;
+      dz += repelZ;
+
       const dist = Math.sqrt(dx * dx + dz * dz);
 
       if (dist > 0.05) {
@@ -174,8 +195,35 @@ export default function AgentAvatar({
         while (diff > Math.PI) diff -= 2 * Math.PI;
         while (diff < -Math.PI) diff += 2 * Math.PI;
         groupRef.current.rotation.y += diff * 0.15;
+
+        // Footstep dust — emit a particle every ~0.35s while walking
+        if (isWalking && t - lastFootstepTime.current > 0.35) {
+          lastFootstepTime.current = t;
+          const idx = Math.floor(t * 3) % 3;
+          const dust = dustRefs.current[idx]?.current;
+          if (dust) {
+            dust.position.set(0, 0.05, 0);
+            dust.material.opacity = 0.4;
+            dust.scale.setScalar(0.5);
+            dust.userData.bornAt = t;
+          }
+        }
       }
     }
+
+    // Fade & lift footstep dust over its lifetime
+    dustRefs.current.forEach(ref => {
+      const d = ref?.current;
+      if (!d || !d.userData.bornAt) return;
+      const age = t - d.userData.bornAt;
+      if (age > 1.0) {
+        d.material.opacity = 0;
+        return;
+      }
+      d.position.y = 0.05 + age * 0.15;
+      d.material.opacity = 0.4 * (1 - age);
+      d.scale.setScalar(0.5 + age * 0.6);
+    });
   });
 
   return (
@@ -340,6 +388,14 @@ export default function AgentAvatar({
           <meshBasicMaterial color="#FFFFFF" transparent opacity={0.2} />
         </mesh>
       )}
+
+      {/* Footstep dust particles (3 reusable, recycled on each footstep) */}
+      {[0, 1, 2].map(i => (
+        <mesh key={`dust-${i}`} ref={dustRefs.current[i]} position={[0, -1, 0]}>
+          <sphereGeometry args={[0.05, 4, 4]} />
+          <meshBasicMaterial color={ventureColor} transparent opacity={0} />
+        </mesh>
+      ))}
 
       {/* Active particle glow */}
       {isActive && (

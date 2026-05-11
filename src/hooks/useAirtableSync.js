@@ -58,8 +58,12 @@ export default function useAirtableSync() {
 
       if (!mountedRef.current) return;
 
+      // Honor active-template flag: if a template is loaded, don't overwrite agents
+      let templateActive = false;
+      try { templateActive = !!localStorage.getItem('hive-active-template'); } catch {}
+
       // Update each store slice if data was returned
-      if (agents && agents.length > 0) {
+      if (agents && agents.length > 0 && !templateActive) {
         setAgents(agents);
         setDataSource('airtable');
       }

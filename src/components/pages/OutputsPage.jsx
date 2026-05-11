@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FileText, Check, X, RotateCcw, Eye, Download, Mail } from 'lucide-react';
+import { FileText, Check, X, RotateCcw, Eye, Download, Mail, Image as ImageIcon, Sparkles } from 'lucide-react';
 import { VENTURES } from '../../data/constants';
 import useAgentStore from '../../store/agentStore';
 import GlowButton from '../atoms/GlowButton';
 import VentureBadge from '../atoms/VentureBadge';
 import { logActivity, updateOutputStatus, isAirtableConfigured } from '../../lib/airtable';
 import { exportToPDF, exportToDOCX, exportViaEmail } from '../../lib/exportOutput';
+import { generateImage } from '../../lib/llmClient';
 
 // Empty fallback — once Airtable is configured the Outputs table populates this
 // via useAirtableSync. Without Airtable, the page renders an empty state.
@@ -25,6 +26,8 @@ const TYPE_COLORS = {
   document:  '#00D4FF',
   checklist: '#FFB800',
   data:      '#8B5CF6',
+  image:     '#8B5CF6',
+  asset:     '#06B6D4',
 };
 
 export default function OutputsPage() {
@@ -84,6 +87,44 @@ export default function OutputsPage() {
   const handleReject = (id) => handleOutputAction(id, 'rejected', 'output_reviewed', 'Output rejected');
   const handleRevision = (id) => handleOutputAction(id, 'revision_needed', 'output_reviewed', 'Revision requested');
 
+  const [generating, setGenerating] = useState(false);
+  const [genPrompt, setGenPrompt] = useState('');
+
+  const handleGenerateImage = async () => {
+    const prompt = genPrompt.trim();
+    if (!prompt) return;
+    setGenerating(true);
+    try {
+      const result = await generateImage({ prompt, agentName: 'AI Image Studio' });
+      const newOutput = {
+        id: `img_${Date.now()}`,
+        title: prompt.slice(0, 60) + (prompt.length > 60 ? '…' : ''),
+        type: 'image',
+        agent: 'AI Image Studio',
+        agentId: 'ai_studio',
+        venture: 'cross',
+        status: 'pending_review',
+        created: new Date().toISOString(),
+        preview: prompt,
+        imageUrl: result.content,
+        provider: result.provider,
+      };
+      // Add to local list (whether or not Airtable is configured)
+      if (airtableOutputs) {
+        // Add to store
+        const addOutput = useAgentStore.getState().addOutput;
+        addOutput(newOutput);
+      } else {
+        setLocalOutputs(prev => [newOutput, ...prev]);
+      }
+      setGenPrompt('');
+    } catch (err) {
+      alert(`Image generation failed: ${err.message}\n\nMake sure GEMINI_API_KEY or OPENAI_API_KEY is set on your Vercel project (Settings → Env Vars).`);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   const filtered = filter === 'all'
     ? outputs
     : outputs.filter(o => o.status === filter);
@@ -91,7 +132,7 @@ export default function OutputsPage() {
   return (
     <div className="max-w-5xl mx-auto">
       {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
+      <div className="flex items-center gap-3 mb-4">
         <FileText size={20} style={{ color: 'var(--accent-secondary)' }} />
         <h1 className="font-display text-[18px] font-bold tracking-wider" style={{ color: 'var(--text-primary)' }}>
           OUTPUTS
@@ -99,6 +140,26 @@ export default function OutputsPage() {
         <span className="font-system text-[10px] tracking-wider ml-2" style={{ color: 'var(--accent-warning)' }}>
           {outputs.filter(o => o.status === 'pending_review').length} PENDING REVIEW
         </span>
+      </div>
+
+      {/* AI Image Studio */}
+      <div className="mb-5 p-3 rounded-lg flex items-center gap-2" style={{ background: 'rgba(139, 92, 246, 0.06)', border: '1px solid rgba(139, 92, 246, 0.2)' }}>
+        <ImageIcon size={14} style={{ color: '#8B5CF6' }} />
+        <input
+          type="text"
+          value={genPrompt}
+          onChange={e => setGenPrompt(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && !generating) handleGenerateImage(); }}
+          placeholder="Describe an image — Gemini Nano Banana or DALL-E 3 will render it"
+          className="flex-1 font-system text-[11px] outline-none"
+          style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)' }}
+          disabled={generating}
+        />
+        <GlowButton variant="primary" size="sm" onClick={handleGenerateImage} disabled={generating || !genPrompt.trim()}>
+          <span className="flex items-center gap-1">
+            <Sparkles size={11} /> {generating ? 'GENERATING…' : 'GENERATE'}
+          </span>
+        </GlowButton>
       </div>
 
       {/* Filters */}
@@ -177,11 +238,20 @@ export default function OutputsPage() {
                         {o.title}
                       </h3>
                       <p className="font-system text-[9px] mb-1" style={{ color: 'var(--text-muted)' }}>
-                        by {o.agent}
+                        by {o.agent}{o.provider ? ` · ${o.provider}` : ''}
                       </p>
-                      <p className="font-body text-[11px] leading-relaxed line-clamp-2" style={{ color: 'var(--text-tertiary)' }}>
-                        {o.preview}
-                      </p>
+                      {o.imageUrl ? (
+                        <img
+                          src={o.imageUrl}
+                          alt={o.title}
+                          className="mt-2 rounded-md w-full"
+                          style={{ maxHeight: '300px', objectFit: 'cover', border: '1px solid var(--border-subtle)' }}
+                        />
+                      ) : (
+                        <p className="font-body text-[11px] leading-relaxed line-clamp-2" style={{ color: 'var(--text-tertiary)' }}>
+                          {o.preview}
+                        </p>
+                      )}
                     </div>
                   </div>
 

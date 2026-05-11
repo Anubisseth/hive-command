@@ -11,14 +11,30 @@ import GlowButton from '../atoms/GlowButton';
 import { TEAM_TEMPLATES } from '../../data/teamTemplates';
 import useAgentStore from '../../store/agentStore';
 
+const TEMPLATE_KEY = 'hive-active-template';
+
 function TemplateModal({ onClose }) {
   const setAgents = useAgentStore(s => s.setAgents);
+  const setDataSource = useAgentStore(s => s.setDataSource);
 
   const handleLoad = (template) => {
     if (!confirm(`Replace your current swarm with the "${template.label}" template? This clears all existing agents in this browser session.`)) return;
-    setAgents(template.agents.map(a => ({ ...a }))); // shallow-clone to avoid shared refs
+    setAgents(template.agents.map(a => ({ ...a }))); // shallow-clone
+    setDataSource('template'); // signal to useAirtableSync to stop overwriting
+    try { localStorage.setItem(TEMPLATE_KEY, template.id); } catch {}
     onClose();
   };
+
+  const handleClear = () => {
+    if (!confirm('Clear the active template and resume live data (Airtable or local seed)?')) return;
+    try { localStorage.removeItem(TEMPLATE_KEY); } catch {}
+    setDataSource('local');
+    // Re-import the seed so the user sees something
+    import('../../data/agents').then(({ agents }) => setAgents(agents));
+    onClose();
+  };
+
+  const activeId = (() => { try { return localStorage.getItem(TEMPLATE_KEY); } catch { return null; } })();
 
   return (
     <motion.div
@@ -35,10 +51,22 @@ function TemplateModal({ onClose }) {
           <div className="flex items-center gap-2">
             <Sparkles size={16} style={{ color: '#FFB800' }} />
             <h2 className="font-display text-[14px] font-bold tracking-wider" style={{ color: '#FFB800' }}>LOAD TEAM TEMPLATE</h2>
+            {activeId && (
+              <span className="font-system text-[9px] tracking-wider px-2 py-0.5 rounded ml-2" style={{ background: 'rgba(0,255,136,0.1)', color: '#00FF88', border: '1px solid rgba(0,255,136,0.25)' }}>
+                ACTIVE: {TEAM_TEMPLATES.find(t => t.id === activeId)?.label?.toUpperCase() || activeId}
+              </span>
+            )}
           </div>
-          <button onClick={onClose} className="cursor-pointer p-1" style={{ background: 'none', border: 'none', color: 'var(--text-muted)' }}>
-            <X size={18} />
-          </button>
+          <div className="flex items-center gap-2">
+            {activeId && (
+              <button onClick={handleClear} className="font-system text-[9px] tracking-wider px-2 py-1 rounded cursor-pointer" style={{ background: 'rgba(255,51,68,0.08)', color: '#FF3344', border: '1px solid rgba(255,51,68,0.25)' }}>
+                CLEAR TEMPLATE
+              </button>
+            )}
+            <button onClick={onClose} className="cursor-pointer p-1" style={{ background: 'none', border: 'none', color: 'var(--text-muted)' }}>
+              <X size={18} />
+            </button>
+          </div>
         </div>
         <div className="overflow-y-auto p-5" style={{ maxHeight: 'calc(85vh - 70px)' }}>
           <p className="font-system text-[11px] mb-4" style={{ color: 'var(--text-muted)' }}>
@@ -50,7 +78,11 @@ function TemplateModal({ onClose }) {
                 key={t.id}
                 onClick={() => handleLoad(t)}
                 className="text-left p-4 rounded-lg cursor-pointer transition-all hover:scale-[1.01]"
-                style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
+                style={{
+                  background: 'var(--bg-elevated)',
+                  border: `1px solid ${activeId === t.id ? '#00FF88' : 'var(--border-subtle)'}`,
+                  boxShadow: activeId === t.id ? '0 0 0 1px rgba(0,255,136,0.15)' : 'none',
+                }}
               >
                 <div className="font-display text-[13px] font-bold tracking-wider mb-1" style={{ color: 'var(--text-primary)' }}>
                   {t.label.toUpperCase()}

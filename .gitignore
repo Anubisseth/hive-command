@@ -53,3 +53,5 @@ OPERATIONS-MANUAL.md
 *.sln
 *.sw?
 .vercel
+.env.vercel-prod-backup
+.env.vercel-backup
