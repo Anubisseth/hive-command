@@ -10,6 +10,10 @@
 </p>
 
 <p align="center">
+  <a href="https://hive-command-lemon.vercel.app"><img src="https://img.shields.io/badge/▶_try_the_demo-00FF88?style=for-the-badge&labelColor=0e0a05&color=00FF88" alt="Try the live demo" /></a>
+</p>
+
+<p align="center">
   <a href="https://hive-command-lemon.vercel.app"><img src="https://img.shields.io/badge/demo-live-00FF88?style=flat-square&labelColor=0e0a05" alt="Live demo" /></a>
   <img src="https://img.shields.io/badge/react-19-00D4FF?style=flat-square&labelColor=0e0a05" alt="React 19" />
   <img src="https://img.shields.io/badge/vite-8-FFB800?style=flat-square&labelColor=0e0a05" alt="Vite 8" />
@@ -116,6 +120,10 @@ Full setup including the **Airtable schema you need to create** is in [SETUP.md]
 ## How to use
 
 The full operator's guide — every page, every workflow, every keyboard shortcut — is in [**USER_MANUAL.md**](./USER_MANUAL.md).
+
+## Want to contribute?
+
+Fork the repo, make a branch, open a PR. Details in [**CONTRIBUTING.md**](./CONTRIBUTING.md).
 
 ## Pages
 

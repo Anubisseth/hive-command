@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Grid3x3, Building2, Zap, FileText, BarChart3, Settings, Bell, Crown, Binary, Cloud, HardDrive, Building, Hexagon } from 'lucide-react';
+import { Grid3x3, Building2, Zap, FileText, BarChart3, Settings, Bell, Crown, Binary, Cloud, HardDrive, Building, Hexagon, Info, X } from 'lucide-react';
 import SearchInput from '../atoms/SearchInput';
 import MatrixRain from '../atoms/MatrixRain';
 import useAgentStore from '../../store/agentStore';
@@ -17,9 +17,14 @@ const ICONS = { Grid3x3, Building2, Zap, FileText, BarChart3, Settings, Building
 // Navigation sourced from constants.js — single source of truth
 const NAV = NAV_ITEMS;
 
+const DEMO_BANNER_KEY = 'hive-demo-banner-dismissed';
+
 export default function DashboardShell() {
   const [matrixOn, setMatrixOn] = useState(true);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [demoBannerDismissed, setDemoBannerDismissed] = useState(() => {
+    try { return !!localStorage.getItem(DEMO_BANNER_KEY); } catch { return false; }
+  });
   const searchQuery = useAgentStore(s => s.searchQuery);
   const setSearch = useAgentStore(s => s.setSearch);
   const counts = useStatusCounts();
@@ -30,8 +35,56 @@ export default function DashboardShell() {
   // Start Airtable sync on mount
   useAirtableSync();
 
+  // DEMO MODE: when no Airtable is configured AND no template is loaded,
+  // we're running on the local seed only — make this visible so visitors
+  // know they're in a sandbox, not a live system.
+  const isDemoMode = source !== 'airtable' && source !== 'template';
+  const showDemoBanner = isDemoMode && !demoBannerDismissed;
+
+  const dismissDemoBanner = () => {
+    try { localStorage.setItem(DEMO_BANNER_KEY, '1'); } catch {}
+    setDemoBannerDismissed(true);
+  };
+
   return (
     <div className="h-screen flex flex-col" style={{ background: 'var(--bg-void)' }}>
+      {showDemoBanner && (
+        <div
+          className="flex items-center justify-between gap-3 px-5 py-2 flex-shrink-0"
+          style={{
+            background: 'linear-gradient(90deg, rgba(255,184,0,0.12), rgba(0,212,255,0.10))',
+            borderBottom: '1px solid rgba(255,184,0,0.30)',
+            color: '#FFB800',
+          }}
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <Info size={12} className="flex-shrink-0" />
+            <span className="font-system text-[10px] tracking-wider font-semibold">DEMO MODE</span>
+            <span className="font-system text-[10px] truncate" style={{ color: 'var(--text-secondary)' }}>
+              You're seeing generic seed data — no Airtable backend. Fork the repo + add your own .env to run with your real swarm.
+            </span>
+          </div>
+          <div className="flex items-center gap-3 flex-shrink-0">
+            <a
+              href="https://github.com/Anubisseth/hive-command#quick-start"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-system text-[10px] tracking-wider font-semibold no-underline px-2 py-1 rounded"
+              style={{ background: 'rgba(255,184,0,0.12)', color: '#FFB800', border: '1px solid rgba(255,184,0,0.30)' }}
+            >
+              SETUP →
+            </a>
+            <button
+              onClick={dismissDemoBanner}
+              className="cursor-pointer p-1"
+              style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)' }}
+              aria-label="Dismiss demo banner"
+            >
+              <X size={12} />
+            </button>
+          </div>
+        </div>
+      )}
       {/* Top Bar */}
       <header
         className="flex items-center justify-between px-5 py-3 flex-shrink-0"
