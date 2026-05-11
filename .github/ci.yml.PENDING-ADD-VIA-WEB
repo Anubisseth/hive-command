@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    name: Lint + Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Scan PR diff for accidental secrets + personal data
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -e
+          # Validate BASE_REF looks like a branch name (no injection)
+          if ! printf '%s' "$BASE_REF" | grep -qE '^[A-Za-z0-9._/-]+$'; then
+            echo "::error::Unexpected BASE_REF format. Aborting."
+            exit 1
+          fi
+          git fetch origin "$BASE_REF" --depth=1
+          DIFF=$(git diff "origin/$BASE_REF...HEAD")
+          if printf '%s' "$DIFF" | grep -E '(sk-proj-[A-Za-z0-9_-]{20,}|sk-ant-[A-Za-z0-9_-]{20,}|pat[A-Za-z0-9]{14,}\.|AIza[A-Za-z0-9_-]{30,})' ; then
+            echo "::error::Looks like an API key snuck into the diff. Block."
+            exit 1
+          fi
+          if printf '%s' "$DIFF" | grep -Ei '(obsidian_flow|syndiam|tenere|nutrirave|jetpulse)' ; then
+            echo "::error::Personal venture identifiers in diff. Use generic placeholders."
+            exit 1
+          fi
+          echo "Secret scan passed."
+
+  scrub-check:
+    name: Repo-wide scrub check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Grep tracked files for known leak patterns
+        run: |
+          set -e
+          if git ls-files -z | xargs -0 grep -lE '(sk-proj-[A-Za-z0-9_-]{20,}|sk-ant-[A-Za-z0-9_-]{20,}|pat[A-Za-z0-9]{14,}\.)' 2>/dev/null; then
+            echo "::error::API key pattern found in tracked files."
+            exit 1
+          fi
+          echo "Clean."

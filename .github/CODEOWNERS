@@ -1,0 +1,34 @@
+# =============================================
+# HIVE COMMAND — Code Owners
+# =============================================
+# Auto-requests review from listed owners when matching files change in a PR.
+# Pattern follows .gitignore-style globs.
+# Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-security/customizing-your-repository/about-code-owners
+# =============================================
+
+# Default owner for everything not matched below
+*                                     @Anubisseth
+
+# 3D office is sensitive — touch carefully
+src/components/3d/                    @Anubisseth
+src/components/organisms/RetroOffice3D.jsx  @Anubisseth
+
+# AI proxy + security
+api/                                  @Anubisseth
+src/lib/llmClient.js                  @Anubisseth
+src/lib/aiPricing.js                  @Anubisseth
+
+# Commander Loop engine
+src/lib/commanderLoop.js              @Anubisseth
+src/lib/commanderPrompts.js           @Anubisseth
+src/hooks/useCommanderLoop.js         @Anubisseth
+
+# Store and sync
+src/store/                            @Anubisseth
+src/hooks/useAirtableSync.js          @Anubisseth
+
+# Docs
+README.md                             @Anubisseth
+SETUP.md                              @Anubisseth
+USER_MANUAL.md                        @Anubisseth
+CONTRIBUTING.md                       @Anubisseth

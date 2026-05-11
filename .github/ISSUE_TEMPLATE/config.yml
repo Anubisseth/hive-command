@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 🛠️ Setup help
+    url: https://github.com/Anubisseth/hive-command/blob/main/SETUP.md
+    about: Installation, env vars, Airtable schema — covered in SETUP.md
+  - name: 📖 How to use the dashboard
+    url: https://github.com/Anubisseth/hive-command/blob/main/USER_MANUAL.md
+    about: Every page, every workflow, every keyboard shortcut
+  - name: 🔒 Security issue
+    url: https://github.com/Anubisseth/hive-command/security/advisories/new
+    about: Report security issues privately, NOT as a public issue
