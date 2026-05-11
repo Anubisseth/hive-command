@@ -10,14 +10,18 @@ import OfficeFurniture from '../3d/OfficeFurniture';
 import AgentAvatar from '../3d/AgentAvatar';
 import OfficeEnvironment from '../3d/OfficeEnvironment';
 import CameraController from '../3d/CameraController';
-import { assignDeskPositions, getWanderTarget } from '../../lib/pathfinding';
+import { assignDeskPositions, buildPOIs, pickPOIForStatus } from '../../lib/pathfinding';
+import { VENTURES } from '../../data/constants';
 import useAgentStore from '../../store/agentStore';
 
 /**
- * Agent tick system — manages agent movement and behaviors
- * Runs outside React render cycle for performance (claw3d pattern)
+ * Agent tick system — manages agent movement and behaviors.
+ * Drives the office-level state machine: agents pick POIs based on their status,
+ * walk there, hang for a bit, then return to their desk.
+ *
+ * Behaviors: working | walking | atPOI | talking | idle | blocked | offline
  */
-function useAgentTick(agents, deskPositions) {
+function useAgentTick(agents, deskPositions, pois) {
   const [agentStates, setAgentStates] = useState({});
   const tickRef = useRef(null);
   const statesRef = useRef({});
@@ -33,7 +37,9 @@ function useAgentTick(agents, deskPositions) {
         position: [desk.x, 0, desk.z],
         targetPosition: [desk.x, 0, desk.z],
         behavior: agent.status === 'active' ? 'working' : 'idle',
-        wanderTimer: 3 + Math.random() * 8,
+        currentPOI: null,
+        moveTimer: 4 + Math.random() * 10,
+        talkPartner: null,
         lastUpdate: Date.now(),
       };
     });
@@ -47,6 +53,7 @@ function useAgentTick(agents, deskPositions) {
       const now = Date.now();
       let changed = false;
 
+      // Phase 1: per-agent behavior updates
       Object.entries(statesRef.current).forEach(([agentId, state]) => {
         const agent = agents.find(a => a.id === agentId);
         if (!agent) return;
@@ -54,42 +61,115 @@ function useAgentTick(agents, deskPositions) {
         if (!desk) return;
 
         const elapsed = (now - state.lastUpdate) / 1000;
-        state.wanderTimer -= elapsed;
+        state.moveTimer -= elapsed;
         state.lastUpdate = now;
 
-        // Active agents occasionally wander to "collaborate"
-        if (agent.status === 'active' && state.wanderTimer <= 0) {
-          if (state.behavior === 'working') {
-            // Go wander
-            const target = getWanderTarget(desk, 2.5);
-            state.targetPosition = [target.x, 0, target.z];
-            state.behavior = 'wandering';
-            state.wanderTimer = 2 + Math.random() * 3;
-          } else {
+        // Offline → stay put silently
+        if (agent.status === 'offline') {
+          if (state.behavior !== 'offline') {
+            state.targetPosition = [desk.x, 0, desk.z];
+            state.behavior = 'offline';
+            state.currentPOI = null;
+            changed = true;
+          }
+          return;
+        }
+
+        // Blocked → stay at desk, red pulse handled in avatar
+        if (agent.status === 'blocked') {
+          if (state.behavior !== 'blocked') {
+            state.targetPosition = [desk.x, 0, desk.z];
+            state.behavior = 'blocked';
+            state.currentPOI = null;
+            changed = true;
+          }
+          return;
+        }
+
+        // Talking takes priority — handled in phase 2 below
+
+        // Movement loop for active/idle/reviewing
+        if (state.moveTimer <= 0) {
+          if (state.behavior === 'walking' || state.behavior === 'atPOI') {
             // Return to desk
             state.targetPosition = [desk.x, 0, desk.z];
-            state.behavior = 'working';
-            state.wanderTimer = 5 + Math.random() * 10;
+            state.behavior = 'walking';
+            state.currentPOI = null;
+            state.moveTimer = 8 + Math.random() * 12; // stay at desk for a while
+          } else {
+            // Pick a POI to walk to (or stay if pickPOIForStatus returns null)
+            const poi = pickPOIForStatus(agent, pois, deskPositions);
+            if (poi) {
+              state.targetPosition = [poi.x, 0, poi.z];
+              state.behavior = 'walking';
+              state.currentPOI = poi.type;
+              state.moveTimer = 6 + Math.random() * 8; // dwell at POI
+            } else {
+              // Stay at desk
+              state.targetPosition = [desk.x, 0, desk.z];
+              state.behavior = agent.status === 'active' ? 'working' : 'idle';
+              state.moveTimer = 5 + Math.random() * 8;
+            }
           }
           changed = true;
         }
 
-        // Idle agents stay at desk
-        if (agent.status === 'idle') {
-          state.targetPosition = [desk.x, 0, desk.z];
-          state.behavior = 'idle';
+        // Transition walking → atPOI / working when we've arrived
+        if (state.behavior === 'walking') {
+          const dx = state.targetPosition[0] - state.position[0];
+          const dz = state.targetPosition[2] - state.position[2];
+          if (Math.hypot(dx, dz) < 0.2) {
+            const atDesk = Math.hypot(state.targetPosition[0] - desk.x, state.targetPosition[2] - desk.z) < 0.3;
+            state.behavior = atDesk
+              ? (agent.status === 'active' ? 'working' : 'idle')
+              : 'atPOI';
+            changed = true;
+          }
         }
+      });
 
-        // Blocked agents stay put with no movement
-        if (agent.status === 'blocked') {
-          state.targetPosition = [desk.x, 0, desk.z];
-          state.behavior = 'blocked';
+      // Phase 2: detect proximity-based talking interactions
+      const agentList = Object.entries(statesRef.current);
+      for (let i = 0; i < agentList.length; i++) {
+        const [idA, sA] = agentList[i];
+        if (sA.behavior === 'offline' || sA.behavior === 'blocked') continue;
+        if (sA.behavior === 'walking') continue; // don't interrupt walking
+        if (sA.talkPartner) continue;
+
+        for (let j = i + 1; j < agentList.length; j++) {
+          const [idB, sB] = agentList[j];
+          if (sB.behavior === 'offline' || sB.behavior === 'blocked') continue;
+          if (sB.behavior === 'walking') continue;
+          if (sB.talkPartner) continue;
+
+          const d = Math.hypot(sA.position[0] - sB.position[0], sA.position[2] - sB.position[2]);
+          if (d < 1.5 && Math.random() < 0.005) {
+            // Start talking
+            sA.talkPartner = idB;
+            sB.talkPartner = idA;
+            sA.behavior = 'talking';
+            sB.behavior = 'talking';
+            sA.moveTimer = 4 + Math.random() * 4;
+            sB.moveTimer = sA.moveTimer;
+            changed = true;
+            break;
+          }
         }
+      }
 
-        // Offline agents don't move
-        if (agent.status === 'offline') {
-          state.targetPosition = [desk.x, 0, desk.z];
-          state.behavior = 'offline';
+      // Phase 3: end talking when timer expires
+      agentList.forEach(([id, s]) => {
+        if (s.behavior === 'talking' && s.moveTimer <= 0) {
+          const partnerState = s.talkPartner ? statesRef.current[s.talkPartner] : null;
+          s.talkPartner = null;
+          if (partnerState) {
+            partnerState.talkPartner = null;
+            partnerState.behavior = 'atPOI';
+            partnerState.moveTimer = 1 + Math.random() * 2;
+          }
+          s.behavior = 'atPOI';
+          s.moveTimer = 1 + Math.random() * 2;
+          changed = true;
         }
       });
 
@@ -104,7 +184,7 @@ function useAgentTick(agents, deskPositions) {
     return () => {
       if (tickRef.current) cancelAnimationFrame(tickRef.current);
     };
-  }, [agents, deskPositions]);
+  }, [agents, deskPositions, pois]);
 
   return agentStates;
 }
@@ -115,9 +195,10 @@ function useAgentTick(agents, deskPositions) {
 function OfficeScene({ agents, onAgentClick, selectedAgentId, cameraPreset, showStats }) {
   // Calculate desk positions based on ventures
   const deskPositions = useMemo(() => assignDeskPositions(agents), [agents]);
+  const pois = useMemo(() => buildPOIs(VENTURES), []);
 
   // Agent tick system for movement behaviors
-  const agentStates = useAgentTick(agents, deskPositions);
+  const agentStates = useAgentTick(agents, deskPositions, pois);
 
   // Follow selected agent
   const followTarget = useMemo(() => {
@@ -145,6 +226,8 @@ function OfficeScene({ agents, onAgentClick, selectedAgentId, cameraPreset, show
             agent={agent}
             position={state.position}
             targetPosition={state.targetPosition}
+            behavior={state.behavior}
+            talkPartnerId={state.talkPartner}
             onClick={onAgentClick}
             isSelected={agent.id === selectedAgentId}
           />

@@ -183,3 +183,72 @@ export function getWanderTarget(deskPos, range = 3) {
     z: deskPos.z + Math.sin(angle) * dist,
   };
 }
+
+/**
+ * Build Points of Interest per venture zone — whiteboard, coffee, water cooler.
+ * Plus shared global POIs: central meeting table.
+ *
+ * Returns { byVenture: { [ventureKey]: { whiteboard, coffee }... }, global: { meetingTable } }
+ */
+export function buildPOIs(ventures) {
+  const zones = buildVentureZones(ventures);
+  const byVenture = {};
+
+  Object.entries(zones).forEach(([key, zone]) => {
+    if (key === 'cross') return; // cross is central, uses global POIs
+    // Whiteboard sits behind the desks (further from center)
+    const fromCenter = Math.hypot(zone.cx, zone.cz) || 1;
+    const dx = zone.cx / fromCenter;
+    const dz = zone.cz / fromCenter;
+    byVenture[key] = {
+      whiteboard: { x: zone.cx + dx * 2.4,  z: zone.cz + dz * 2.4,  type: 'whiteboard' },
+      coffee:     { x: zone.cx - dx * 1.8,  z: zone.cz - dz * 1.8,  type: 'coffee'     },
+    };
+  });
+
+  return {
+    byVenture,
+    global: {
+      meetingTable: { x: 0, z: 0, type: 'meetingTable' },
+      waterCooler:  { x: 0, z: -10, type: 'waterCooler' },
+    },
+  };
+}
+
+/**
+ * Pick a target POI for an agent based on its status and venture.
+ * Returns a target { x, z, type } or null to stay at desk.
+ */
+export function pickPOIForStatus(agent, pois, allDesks) {
+  const venturePOIs = pois.byVenture[agent.venture] || null;
+  const r = Math.random();
+
+  switch (agent.status) {
+    case 'active':
+      // 60% desk, 25% whiteboard, 15% meeting table
+      if (r < 0.6) return null;
+      if (r < 0.85 && venturePOIs) return venturePOIs.whiteboard;
+      return pois.global.meetingTable;
+
+    case 'reviewing': {
+      // 40% own desk, 40% meeting table, 20% another agent's desk
+      if (r < 0.4) return null;
+      if (r < 0.8) return pois.global.meetingTable;
+      const others = Object.entries(allDesks).filter(([id]) => id !== agent.id);
+      if (others.length === 0) return null;
+      const [, desk] = others[Math.floor(Math.random() * others.length)];
+      return { x: desk.x, z: desk.z, type: 'desk' };
+    }
+
+    case 'idle':
+      // 50% desk, 30% coffee, 20% water cooler
+      if (r < 0.5) return null;
+      if (r < 0.8 && venturePOIs) return venturePOIs.coffee;
+      return pois.global.waterCooler;
+
+    case 'blocked':
+    case 'offline':
+    default:
+      return null; // stay at desk
+  }
+}

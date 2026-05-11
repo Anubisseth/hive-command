@@ -32,11 +32,14 @@ export default function AgentAvatar({
   agent,
   position = [0, 0, 0],
   targetPosition = null,
+  behavior = 'idle',
+  talkPartnerId = null,
   onClick,
   isSelected = false,
 }) {
   const groupRef = useRef();
   const bodyRef = useRef();
+  const headRef = useRef();
   const [hovered, setHovered] = useState(false);
   const pointerDownPos = useRef(null);
 
@@ -45,6 +48,10 @@ export default function AgentAvatar({
   const ventureColor = VENTURES[agent.venture]?.color || '#8B5CF6';
   const isActive = agent.status === 'active';
   const isOffline = agent.status === 'offline';
+  const isBlocked = agent.status === 'blocked';
+  const isWorking = behavior === 'working';
+  const isWalking = behavior === 'walking';
+  const isTalking = behavior === 'talking';
 
   // Track pointer-down position for click-vs-drag detection
   const handlePointerDown = useCallback((e) => {
@@ -79,21 +86,62 @@ export default function AgentAvatar({
     document.body.style.cursor = 'default';
   }, []);
 
-  // Smooth movement toward target
+  // Procedural animations + smooth movement
   useFrame((state, delta) => {
     if (!groupRef.current) return;
+    const t = state.clock.elapsedTime;
+    const phase = t * 2 + position[0];
 
-    // Breathing/idle animation
+    // ─── Body animation by behavior ─────────────────────
     if (bodyRef.current) {
-      const t = state.clock.elapsedTime;
-      if (isActive) {
-        bodyRef.current.position.y = 0.55 + Math.sin(t * 2 + position[0]) * 0.02;
-      } else {
+      if (isWorking || isActive) {
+        // Typing motion: subtle vertical bob + tiny side-to-side
+        bodyRef.current.position.y = 0.55 + Math.sin(phase) * 0.02;
+        bodyRef.current.rotation.z = Math.sin(phase * 0.7) * 0.04;
+      } else if (isWalking) {
+        // Walking gait: more pronounced bob + slight forward lean
+        bodyRef.current.position.y = 0.55 + Math.abs(Math.sin(t * 8)) * 0.04;
+        bodyRef.current.rotation.x = 0.08;
+        bodyRef.current.rotation.z = 0;
+      } else if (isTalking) {
+        // Talking: gentle sway
         bodyRef.current.position.y = 0.55;
+        bodyRef.current.rotation.z = Math.sin(t * 1.5) * 0.05;
+        bodyRef.current.rotation.x = 0;
+      } else if (isBlocked) {
+        // Stuck: slight slump
+        bodyRef.current.position.y = 0.52;
+        bodyRef.current.rotation.x = 0.15;
+        bodyRef.current.rotation.z = 0;
+      } else {
+        // Idle: very slight breathing
+        bodyRef.current.position.y = 0.55 + Math.sin(t * 1.2) * 0.008;
+        bodyRef.current.rotation.x = 0;
+        bodyRef.current.rotation.z = 0;
       }
     }
 
-    // Move toward target if we have one
+    // ─── Head animation by behavior ─────────────────────
+    if (headRef.current) {
+      if (isWorking) {
+        // Head tilted forward looking at "screen"
+        headRef.current.rotation.x = 0.25 + Math.sin(phase * 0.5) * 0.02;
+        headRef.current.rotation.y = 0;
+      } else if (isTalking) {
+        // Head turns side-to-side as if conversing
+        headRef.current.rotation.x = 0;
+        headRef.current.rotation.y = Math.sin(t * 1.8) * 0.25;
+      } else if (isWalking) {
+        // Looking forward
+        headRef.current.rotation.x = -0.05;
+        headRef.current.rotation.y = 0;
+      } else {
+        headRef.current.rotation.x = 0;
+        headRef.current.rotation.y = 0;
+      }
+    }
+
+    // ─── Move toward target ─────────────────────────────
     if (targetPosition) {
       const current = groupRef.current.position;
       const dx = targetPosition[0] - current.x;
@@ -101,14 +149,20 @@ export default function AgentAvatar({
       const dist = Math.sqrt(dx * dx + dz * dz);
 
       if (dist > 0.05) {
-        const speed = isActive ? 2 : 1;
-        const step = Math.min(speed * delta, dist);
+        // Walking speed depends on tier (Commander struts slower, Agents scurry)
+        const baseSpeed = isWalking ? (agent.tier >= 2 ? 1.6 : 1.2) : (isActive ? 0.6 : 0.3);
+        const step = Math.min(baseSpeed * delta, dist);
         current.x += (dx / dist) * step;
         current.z += (dz / dist) * step;
 
         // Face movement direction
         const angle = Math.atan2(dx, dz);
-        groupRef.current.rotation.y += (angle - groupRef.current.rotation.y) * 0.1;
+        const cur = groupRef.current.rotation.y;
+        // Smoothly interpolate angle (handle wrap-around)
+        let diff = angle - cur;
+        while (diff > Math.PI) diff -= 2 * Math.PI;
+        while (diff < -Math.PI) diff += 2 * Math.PI;
+        groupRef.current.rotation.y += diff * 0.15;
       }
     }
   });
@@ -149,27 +203,28 @@ export default function AgentAvatar({
           />
         </mesh>
 
-        {/* Head */}
-        <mesh position={[0, 0.42, 0]} castShadow>
-          <sphereGeometry args={[0.15, 8, 8]} />
-          <meshStandardMaterial
-            color="#E5E7EB"
-            roughness={0.6}
-            metalness={0.1}
-            transparent={isOffline}
-            opacity={isOffline ? 0.3 : 1}
-          />
-        </mesh>
-
-        {/* Status visor */}
-        <mesh position={[0, 0.44, 0.12]}>
-          <boxGeometry args={[0.2, 0.06, 0.05]} />
-          <meshBasicMaterial
-            color={statusColor}
-            transparent
-            opacity={isOffline ? 0.2 : 0.8}
-          />
-        </mesh>
+        {/* Head + visor group (rotates independently) */}
+        <group ref={headRef} position={[0, 0.42, 0]}>
+          <mesh castShadow>
+            <sphereGeometry args={[0.15, 8, 8]} />
+            <meshStandardMaterial
+              color="#E5E7EB"
+              roughness={0.6}
+              metalness={0.1}
+              transparent={isOffline}
+              opacity={isOffline ? 0.3 : 1}
+            />
+          </mesh>
+          {/* Status visor */}
+          <mesh position={[0, 0.02, 0.12]}>
+            <boxGeometry args={[0.2, 0.06, 0.05]} />
+            <meshBasicMaterial
+              color={statusColor}
+              transparent
+              opacity={isOffline ? 0.2 : 0.8}
+            />
+          </mesh>
+        </group>
 
         {/* Tier badge (on chest) */}
         {agent.tier <= 1 && (
