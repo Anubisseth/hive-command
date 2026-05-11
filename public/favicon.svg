@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48" fill="none">
+  <defs>
+    <linearGradient id="hiveGlow" x1="0" y1="0" x2="48" y2="48" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFD700"/>
+      <stop offset="50%" stop-color="#FFB800"/>
+      <stop offset="100%" stop-color="#FF8C00"/>
+    </linearGradient>
+    <linearGradient id="cellFill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFB800" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#FF8C00" stop-opacity="0.08"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="1.5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background circle -->
+  <circle cx="24" cy="24" r="23" fill="#0A0A0E" stroke="url(#hiveGlow)" stroke-width="1.5" opacity="0.9"/>
+
+  <!-- Honeycomb pattern - 7 hexagons -->
+  <g filter="url(#glow)" transform="translate(24,24)">
+    <!-- Center hexagon -->
+    <polygon points="0,-8 6.93,-4 6.93,4 0,8 -6.93,4 -6.93,-4" fill="url(#cellFill)" stroke="#FFB800" stroke-width="1.2" stroke-linejoin="round"/>
+
+    <!-- Top -->
+    <polygon points="0,-22 6.93,-18 6.93,-10 0,-6 -6.93,-10 -6.93,-18" fill="url(#cellFill)" stroke="#FFB800" stroke-width="0.8" stroke-linejoin="round" opacity="0.5"/>
+
+    <!-- Top-right -->
+    <polygon points="12,-15 18.93,-11 18.93,-3 12,1 5.07,-3 5.07,-11" fill="url(#cellFill)" stroke="#FFB800" stroke-width="0.8" stroke-linejoin="round" opacity="0.6"/>
+
+    <!-- Bottom-right -->
+    <polygon points="12,1 18.93,5 18.93,13 12,17 5.07,13 5.07,5" fill="url(#cellFill)" stroke="#FFB800" stroke-width="0.8" stroke-linejoin="round" opacity="0.4"/>
+
+    <!-- Bottom -->
+    <polygon points="0,8 6.93,12 6.93,20 0,24 -6.93,20 -6.93,12" fill="url(#cellFill)" stroke="#FFB800" stroke-width="0.8" stroke-linejoin="round" opacity="0.35"/>
+
+    <!-- Bottom-left -->
+    <polygon points="-12,1 -5.07,5 -5.07,13 -12,17 -18.93,13 -18.93,5" fill="url(#cellFill)" stroke="#FFB800" stroke-width="0.8" stroke-linejoin="round" opacity="0.45"/>
+
+    <!-- Top-left -->
+    <polygon points="-12,-15 -5.07,-11 -5.07,-3 -12,1 -18.93,-3 -18.93,-11" fill="url(#cellFill)" stroke="#FFB800" stroke-width="0.8" stroke-linejoin="round" opacity="0.55"/>
+  </g>
+
+  <!-- Center bee silhouette -->
+  <g transform="translate(24,24)" fill="#FFB800" opacity="0.9">
+    <!-- Body -->
+    <ellipse cx="0" cy="0.5" rx="2.8" ry="3.5"/>
+    <!-- Head -->
+    <circle cx="0" cy="-3.5" r="1.8"/>
+    <!-- Wings -->
+    <ellipse cx="-3" cy="-1" rx="2.2" ry="1.2" transform="rotate(-20 -3 -1)" fill="#FFB800" opacity="0.5"/>
+    <ellipse cx="3" cy="-1" rx="2.2" ry="1.2" transform="rotate(20 3 -1)" fill="#FFB800" opacity="0.5"/>
+    <!-- Stripes -->
+    <rect x="-2.5" y="-0.5" width="5" height="0.8" rx="0.4" fill="#0A0A0E" opacity="0.6"/>
+    <rect x="-2.2" y="1.2" width="4.4" height="0.8" rx="0.4" fill="#0A0A0E" opacity="0.6"/>
+    <!-- Antennae -->
+    <line x1="-1" y1="-5" x2="-2.5" y2="-7" stroke="#FFB800" stroke-width="0.5" stroke-linecap="round"/>
+    <line x1="1" y1="-5" x2="2.5" y2="-7" stroke="#FFB800" stroke-width="0.5" stroke-linecap="round"/>
+    <circle cx="-2.5" cy="-7" r="0.5" fill="#FFB800"/>
+    <circle cx="2.5" cy="-7" r="0.5" fill="#FFB800"/>
+  </g>
+</svg>

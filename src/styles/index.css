@@ -1,0 +1,426 @@
+@import "tailwindcss";
+
+/* ═══════════════════════════════════════════════════
+   HIVE COMMAND — Design Tokens
+   ═══════════════════════════════════════════════════ */
+
+:root {
+  /* Backgrounds — warm amber-brown tones */
+  --bg-void:        #0a0a0e;
+  --bg-primary:     #0e0e12;
+  --bg-elevated:    rgba(30, 25, 18, 0.82);
+  --bg-surface:     rgba(38, 32, 22, 0.85);
+  --bg-hover:       rgba(48, 40, 28, 0.9);
+
+  /* Grid & Structure */
+  --grid-line:      rgba(140, 120, 180, 0.06);
+  --grid-dot:       rgba(140, 120, 180, 0.08);
+  --border-subtle:  rgba(255, 160, 40, 0.2);
+  --border-default: rgba(255, 160, 40, 0.3);
+  --border-strong:  rgba(255, 160, 40, 0.45);
+
+  /* Status Colors */
+  --status-active:    #00FF88;
+  --status-idle:      #FFB800;
+  --status-blocked:   #FF3344;
+  --status-offline:   #6B7280;
+  --status-reviewing: #00D4FF;
+
+  /* Tier Colors */
+  --tier-commander:   #FFB800;
+  --tier-director:    #FF6B2B;
+  --tier-manager:     #4ADE80;
+  --tier-agent:       #4ADE80;
+
+  /* Venture Colors */
+  --venture-of:       #3B82F6;
+  --venture-syn:      #C7D2FE;
+  --venture-chk:      #1E40AF;
+  --venture-ten:      #D97706;
+  --venture-nut:      #10B981;
+  --venture-jet:      #06B6D4;
+  --venture-cross:    #8B5CF6;
+
+  /* Text */
+  --text-primary:     #F9FAFB;
+  --text-secondary:   #D1D5DB;
+  --text-tertiary:    #9CA3AF;
+  --text-muted:       #6B7280;
+  --text-disabled:    #4B5563;
+
+  /* Semantic */
+  --accent-primary:   #00FF88;
+  --accent-secondary: #00D4FF;
+  --accent-warning:   #FFB800;
+  --accent-danger:    #FF3344;
+  --accent-info:      #8B5CF6;
+
+  /* Spacing */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* Radius */
+  --radius-sm:  4px;
+  --radius-md:  6px;
+  --radius-lg:  8px;
+  --radius-xl:  12px;
+  --radius-2xl: 16px;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-sm:   0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md:   0 4px 6px rgba(0, 0, 0, 0.4);
+  --shadow-lg:   0 10px 15px rgba(0, 0, 0, 0.5);
+  --shadow-xl:   0 20px 25px rgba(0, 0, 0, 0.6);
+
+  /* Fonts */
+  --font-display: 'Orbitron', sans-serif;
+  --font-system:  'JetBrains Mono', monospace;
+  --font-body:    'Instrument Sans', sans-serif;
+}
+
+/* ═══════════════════════════════════════════════════
+   Base Styles
+   ═══════════════════════════════════════════════════ */
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  background: var(--bg-void);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar — webkit + Firefox */
+* {
+  scrollbar-color: var(--border-default) var(--bg-primary);
+  scrollbar-width: thin;
+}
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: var(--radius-full);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-strong);
+}
+
+/* Focus visible — keyboard accessibility */
+:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* ═══════════════════════════════════════════════════
+   Background Effects
+   ═══════════════════════════════════════════════════ */
+
+.grid-bg-dots {
+  background-image:
+    radial-gradient(circle, var(--grid-dot) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.grid-bg-lines {
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* Enhanced tactical grid — deep spatial purple/gray grid */
+.grid-bg-tactical {
+  position: relative;
+  background-color: var(--bg-void);
+  background-image:
+    /* Major grid lines — purple/gray */
+    linear-gradient(rgba(140, 120, 180, 0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(140, 120, 180, 0.07) 1px, transparent 1px),
+    /* Minor grid lines — subtle purple */
+    linear-gradient(rgba(140, 120, 180, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(140, 120, 180, 0.03) 1px, transparent 1px);
+  background-size:
+    160px 160px,
+    160px 160px,
+    32px 32px,
+    32px 32px;
+}
+
+.grid-bg-tactical::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(
+      ellipse at 50% 0%,
+      rgba(255, 140, 40, 0.03) 0%,
+      transparent 40%
+    ),
+    radial-gradient(
+      ellipse at 50% 100%,
+      rgba(100, 80, 160, 0.03) 0%,
+      transparent 35%
+    ),
+    radial-gradient(
+      ellipse at 50% 50%,
+      transparent 50%,
+      rgba(0, 0, 0, 0.45) 100%
+    );
+  pointer-events: none;
+}
+
+.scanline-overlay {
+  position: relative;
+}
+.scanline-overlay::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.03) 2px,
+    rgba(0, 0, 0, 0.03) 4px
+  );
+  pointer-events: none;
+}
+
+.vignette {
+  position: relative;
+}
+.vignette::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse at 50% 50%,
+    transparent 60%,
+    rgba(0, 0, 0, 0.4) 100%
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ═══════════════════════════════════════════════════
+   Card Glow Effects — Floating card aesthetic
+   ═══════════════════════════════════════════════════ */
+
+.card-tactical {
+  background: linear-gradient(160deg, rgba(40, 32, 18, 0.88) 0%, rgba(28, 22, 12, 0.85) 100%);
+  backdrop-filter: blur(6px);
+  border: 1.5px solid rgba(255, 150, 30, 0.3);
+  box-shadow:
+    0 0 2px rgba(255, 150, 30, 0.2),
+    inset 0 1px 0 rgba(255, 180, 60, 0.08),
+    0 6px 28px rgba(0, 0, 0, 0.65);
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+.card-tactical:hover {
+  border-color: rgba(255, 150, 30, 0.55);
+  box-shadow:
+    0 0 8px rgba(255, 150, 30, 0.25),
+    0 0 35px rgba(255, 150, 30, 0.1),
+    inset 0 1px 0 rgba(255, 180, 60, 0.12),
+    0 10px 40px rgba(0, 0, 0, 0.75);
+}
+
+.card-tactical-green {
+  background: linear-gradient(160deg, rgba(22, 35, 20, 0.88) 0%, rgba(16, 25, 14, 0.85) 100%);
+  backdrop-filter: blur(6px);
+  border: 1.5px solid rgba(74, 222, 128, 0.25);
+  box-shadow:
+    0 0 2px rgba(74, 222, 128, 0.2),
+    inset 0 1px 0 rgba(74, 222, 128, 0.06),
+    0 6px 28px rgba(0, 0, 0, 0.65);
+}
+.card-tactical-green:hover {
+  border-color: rgba(74, 222, 128, 0.5);
+  box-shadow:
+    0 0 8px rgba(74, 222, 128, 0.25),
+    0 0 35px rgba(74, 222, 128, 0.1),
+    inset 0 1px 0 rgba(74, 222, 128, 0.1),
+    0 10px 40px rgba(0, 0, 0, 0.75);
+}
+
+/* ═══════════════════════════════════════════════════
+   CSS Entrance Animations (reliable across routes)
+   ═══════════════════════════════════════════════════ */
+
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.animate-in {
+  animation: fadeSlideUp 0.4s ease-out both;
+}
+
+/* ═══════════════════════════════════════════════════
+   React Flow Overrides — tactical theme
+   ═══════════════════════════════════════════════════ */
+
+.react-flow__controls button {
+  background: rgba(30, 25, 18, 0.95) !important;
+  border: 1px solid rgba(255, 150, 30, 0.2) !important;
+  color: rgba(255, 184, 0, 0.7) !important;
+  fill: rgba(255, 184, 0, 0.7) !important;
+  width: 28px !important;
+  height: 28px !important;
+}
+.react-flow__controls button:hover {
+  background: rgba(50, 40, 25, 0.95) !important;
+  color: #FFB800 !important;
+  fill: #FFB800 !important;
+}
+.react-flow__controls button svg {
+  fill: currentColor !important;
+}
+
+.react-flow__minimap {
+  border-radius: 8px !important;
+  overflow: hidden !important;
+}
+
+.react-flow__edge-path {
+  stroke-linecap: round;
+}
+
+.react-flow__node {
+  transition: filter 0.2s;
+}
+.react-flow__node:hover {
+  filter: brightness(1.1);
+}
+.react-flow__node.selected {
+  filter: brightness(1.2) drop-shadow(0 0 8px rgba(255, 184, 0, 0.3));
+}
+
+/* Top accent bar on cards */
+.card-accent-top {
+  position: relative;
+}
+.card-accent-top::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent-warning), transparent 80%);
+  border-radius: 8px 8px 0 0;
+}
+
+/* ═══════════════════════════════════════════════════
+   Typography Utilities
+   ═══════════════════════════════════════════════════ */
+
+.font-display { font-family: var(--font-display); }
+.font-system  { font-family: var(--font-system); }
+.font-body    { font-family: var(--font-body); }
+
+/* ═══════════════════════════════════════════════════
+   Glow Utilities
+   ═══════════════════════════════════════════════════ */
+
+.glow-green  { box-shadow: 0 0 20px rgba(0, 255, 136, 0.15); }
+.glow-cyan   { box-shadow: 0 0 20px rgba(0, 212, 255, 0.15); }
+.glow-amber  { box-shadow: 0 0 20px rgba(255, 184, 0, 0.15); }
+.glow-red    { box-shadow: 0 0 20px rgba(255, 51, 68, 0.15); }
+.glow-purple { box-shadow: 0 0 20px rgba(139, 92, 246, 0.15); }
+
+/* ═══════════════════════════════════════════════════
+   Antigravity / PWA / Safe Area Support
+   ═══════════════════════════════════════════════════ */
+
+/* Safe area padding for notched devices and Antigravity */
+.safe-top    { padding-top:    env(safe-area-inset-top, 0px); }
+.safe-right  { padding-right:  env(safe-area-inset-right, 0px); }
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+.safe-left   { padding-left:   env(safe-area-inset-left, 0px); }
+
+/* Prevent rubber-banding/overscroll in Antigravity */
+html, body {
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Ensure full viewport coverage in standalone mode */
+@media (display-mode: standalone) {
+  body {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+}
+
+/* Antigravity window drag region — top bar */
+.antigravity-drag {
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+.antigravity-no-drag {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+/* ═══════════════════════════════════════════════════
+   Reduced Motion — respect user preferences
+   ═══════════════════════════════════════════════════ */
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-in {
+    animation: none !important;
+    opacity: 1 !important;
+  }
+  .scanline-overlay::after {
+    display: none;
+  }
+  * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* Manual reduce-motion toggle from Settings */
+.reduce-motion .animate-in {
+  animation: none !important;
+  opacity: 1 !important;
+}
+.reduce-motion * {
+  transition-duration: 0.01ms !important;
+  animation-duration: 0.01ms !important;
+}
+
+/* ═══════════════════════════════════════════════════
+   Spinner Animation (for LoadingState)
+   ═══════════════════════════════════════════════════ */
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.animate-spin {
+  animation: spin 1s linear infinite;
+}

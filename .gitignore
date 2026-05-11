@@ -1,0 +1,55 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Environment variables
+.env
+.env.local
+.env.production
+
+# Security audit (owner-only, contains sensitive findings)
+SECURITY-AUDIT.md
+
+# Operations manual (owner-only, contains real venture/client references)
+OPERATIONS-MANUAL.md
+
+# macOS resource forks (when working on a removable / non-APFS volume)
+.DS_Store
+._*
+
+# IDE / agent caches (per-developer, should not be shared)
+.agent/
+.claude/skills/
+.codebuddy/
+.codex/
+.continue/
+.cursor/
+.gemini/
+.kiro/
+.opencode/
+.qoder/
+.roo/
+.trae/
+.windsurf/
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.vercel
