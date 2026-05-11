@@ -1,14 +1,84 @@
 import { useState } from 'react';
-import { LayoutGrid, Move3D } from 'lucide-react';
+import { LayoutGrid, Move3D, Sparkles, X } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import StatusBar from '../molecules/StatusBar';
 import FilterBar from '../molecules/FilterBar';
 import AgentGrid from '../organisms/AgentGrid';
 import AgentCanvas from '../organisms/AgentCanvas';
 import AgentDetail from '../organisms/AgentDetail';
 import TaskFeed from '../organisms/TaskFeed';
+import GlowButton from '../atoms/GlowButton';
+import { TEAM_TEMPLATES } from '../../data/teamTemplates';
+import useAgentStore from '../../store/agentStore';
+
+function TemplateModal({ onClose }) {
+  const setAgents = useAgentStore(s => s.setAgents);
+
+  const handleLoad = (template) => {
+    if (!confirm(`Replace your current swarm with the "${template.label}" template? This clears all existing agents in this browser session.`)) return;
+    setAgents(template.agents.map(a => ({ ...a }))); // shallow-clone to avoid shared refs
+    onClose();
+  };
+
+  return (
+    <motion.div
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+    >
+      <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }} onClick={onClose} />
+      <motion.div
+        initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+        className="relative w-full rounded-xl overflow-hidden"
+        style={{ maxWidth: '760px', maxHeight: '85vh', background: 'var(--bg-primary)', border: '1px solid var(--border-default)' }}
+      >
+        <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+          <div className="flex items-center gap-2">
+            <Sparkles size={16} style={{ color: '#FFB800' }} />
+            <h2 className="font-display text-[14px] font-bold tracking-wider" style={{ color: '#FFB800' }}>LOAD TEAM TEMPLATE</h2>
+          </div>
+          <button onClick={onClose} className="cursor-pointer p-1" style={{ background: 'none', border: 'none', color: 'var(--text-muted)' }}>
+            <X size={18} />
+          </button>
+        </div>
+        <div className="overflow-y-auto p-5" style={{ maxHeight: 'calc(85vh - 70px)' }}>
+          <p className="font-system text-[11px] mb-4" style={{ color: 'var(--text-muted)' }}>
+            Pick a pre-wired swarm for your vertical. Loading replaces the agent list in your browser only — it does not modify Airtable.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {TEAM_TEMPLATES.map(t => (
+              <button
+                key={t.id}
+                onClick={() => handleLoad(t)}
+                className="text-left p-4 rounded-lg cursor-pointer transition-all hover:scale-[1.01]"
+                style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}
+              >
+                <div className="font-display text-[13px] font-bold tracking-wider mb-1" style={{ color: 'var(--text-primary)' }}>
+                  {t.label.toUpperCase()}
+                </div>
+                <p className="font-body text-[11px] leading-snug mb-2" style={{ color: 'var(--text-secondary)' }}>
+                  {t.description}
+                </p>
+                <div className="flex items-center gap-3 text-[9px]" style={{ color: 'var(--text-muted)' }}>
+                  <span>{t.agents.length} agents</span>
+                  <span>·</span>
+                  <span>{t.agents.filter(a => a.tier === 1).length} directors</span>
+                  <span>·</span>
+                  <span>{t.agents.filter(a => a.tier === 2).length} managers</span>
+                  <span>·</span>
+                  <span>{t.agents.filter(a => a.tier === 3).length} workers</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
 
 export default function SwarmPage() {
   const [view, setView] = useState('grid'); // 'grid' | 'canvas'
+  const [showTemplates, setShowTemplates] = useState(false);
 
   return (
     <div className={view === 'canvas' ? '' : 'max-w-7xl mx-auto'}>
@@ -17,6 +87,13 @@ export default function SwarmPage() {
         <div className="flex-1">
           <StatusBar />
         </div>
+        {/* Templates button */}
+        <GlowButton variant="amber" size="sm" onClick={() => setShowTemplates(true)}>
+          <span className="flex items-center gap-1">
+            <Sparkles size={11} />
+            TEMPLATES
+          </span>
+        </GlowButton>
         {/* View toggle */}
         <div
           className="flex items-center rounded-lg overflow-hidden"
@@ -73,6 +150,11 @@ export default function SwarmPage() {
 
       {/* Agent detail slide-in panel */}
       <AgentDetail />
+
+      {/* Template loader modal */}
+      <AnimatePresence>
+        {showTemplates && <TemplateModal onClose={() => setShowTemplates(false)} />}
+      </AnimatePresence>
     </div>
   );
 }

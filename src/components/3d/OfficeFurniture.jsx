@@ -3,7 +3,8 @@
 // Desks, chairs, screens, and office elements
 // =============================================
 
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
 import { VENTURES } from '../../data/constants';
 import { buildPOIs } from '../../lib/pathfinding';
 
@@ -95,15 +96,27 @@ function Desk({ position, color = '#1a2332', accentColor = '#00FF88', agentStatu
 }
 
 /**
- * Whiteboard — venture POI for collaboration
+ * Whiteboard — venture POI for collaboration.
+ * Pulses brighter when an agent is nearby (active === true).
  */
-function Whiteboard({ position, color = '#00D4FF' }) {
+function Whiteboard({ position, color = '#00D4FF', active = false }) {
+  const glowRef = useRef();
+  useFrame((state) => {
+    if (!glowRef.current) return;
+    const t = state.clock.elapsedTime;
+    glowRef.current.intensity = active ? 0.8 + Math.sin(t * 4) * 0.3 : 0;
+  });
   return (
     <group position={position}>
       {/* Board */}
       <mesh position={[0, 1.1, 0]} castShadow>
         <boxGeometry args={[1.4, 0.9, 0.04]} />
-        <meshStandardMaterial color="#F5F5F0" roughness={0.85} />
+        <meshStandardMaterial
+          color="#F5F5F0"
+          roughness={0.85}
+          emissive={active ? color : '#000000'}
+          emissiveIntensity={active ? 0.15 : 0}
+        />
       </mesh>
       {/* Frame */}
       <mesh position={[0, 1.1, -0.02]}>
@@ -117,27 +130,56 @@ function Whiteboard({ position, color = '#00D4FF' }) {
           <meshStandardMaterial color="#1A2540" roughness={0.5} metalness={0.7} />
         </mesh>
       ))}
-      {/* Marker squiggles (decorative) */}
+      {/* Marker squiggles — appear progressively when active */}
       <mesh position={[-0.3, 1.2, 0.025]}>
         <planeGeometry args={[0.4, 0.05]} />
-        <meshBasicMaterial color={color} transparent opacity={0.7} />
+        <meshBasicMaterial color={color} transparent opacity={active ? 0.95 : 0.55} />
       </mesh>
       <mesh position={[0.2, 1.05, 0.025]}>
         <planeGeometry args={[0.5, 0.05]} />
-        <meshBasicMaterial color={color} transparent opacity={0.6} />
+        <meshBasicMaterial color={color} transparent opacity={active ? 0.85 : 0.45} />
       </mesh>
       <mesh position={[0, 0.85, 0.025]}>
         <planeGeometry args={[0.3, 0.05]} />
-        <meshBasicMaterial color={color} transparent opacity={0.5} />
+        <meshBasicMaterial color={color} transparent opacity={active ? 0.75 : 0.3} />
       </mesh>
+      {/* New squiggle appears only when active */}
+      {active && (
+        <mesh position={[-0.15, 0.95, 0.025]}>
+          <planeGeometry args={[0.35, 0.05]} />
+          <meshBasicMaterial color={color} transparent opacity={0.8} />
+        </mesh>
+      )}
+      {/* Activity glow */}
+      <pointLight ref={glowRef} position={[0, 1.1, 0.5]} color={color} intensity={0} distance={3.5} />
     </group>
   );
 }
 
 /**
- * Coffee machine — venture POI for idle breaks
+ * Steam particle — small floating dot that rises and fades.
  */
-function CoffeeMachine({ position }) {
+function SteamParticle({ basePos, offset, speed }) {
+  const ref = useRef();
+  useFrame((state) => {
+    if (!ref.current) return;
+    const t = (state.clock.elapsedTime * speed + offset) % 1;
+    ref.current.position.y = basePos[1] + t * 0.8;
+    ref.current.material.opacity = (1 - t) * 0.4;
+    ref.current.scale.setScalar(1 + t * 1.2);
+  });
+  return (
+    <mesh ref={ref} position={basePos}>
+      <sphereGeometry args={[0.025, 4, 4]} />
+      <meshBasicMaterial color="#F5F5F0" transparent opacity={0.4} />
+    </mesh>
+  );
+}
+
+/**
+ * Coffee machine — venture POI for idle breaks. Steams when an agent is nearby.
+ */
+function CoffeeMachine({ position, active = false }) {
   return (
     <group position={position}>
       {/* Base counter */}
@@ -153,14 +195,22 @@ function CoffeeMachine({ position }) {
       {/* Steam light */}
       <mesh position={[0, 1.05, 0.18]}>
         <sphereGeometry args={[0.04, 8, 8]} />
-        <meshBasicMaterial color="#FF6B35" />
+        <meshBasicMaterial color={active ? '#FFB800' : '#FF6B35'} />
       </mesh>
-      <pointLight position={[0, 1.05, 0.18]} color="#FF6B35" intensity={0.4} distance={1} />
+      <pointLight position={[0, 1.05, 0.18]} color={active ? '#FFB800' : '#FF6B35'} intensity={active ? 0.9 : 0.4} distance={1.5} />
       {/* Coffee cup */}
       <mesh position={[0.18, 0.85, 0.18]} castShadow>
         <cylinderGeometry args={[0.05, 0.04, 0.08, 8]} />
         <meshStandardMaterial color="#F9FAFB" roughness={0.5} />
       </mesh>
+      {/* Steam particles when active */}
+      {active && (
+        <>
+          <SteamParticle basePos={[0, 1.25, 0]} offset={0}    speed={0.4} />
+          <SteamParticle basePos={[-0.05, 1.25, 0.05]} offset={0.3} speed={0.5} />
+          <SteamParticle basePos={[0.05, 1.25, -0.05]} offset={0.6} speed={0.45} />
+        </>
+      )}
     </group>
   );
 }
@@ -270,7 +320,7 @@ function Walls() {
 /**
  * Complete furniture layout for the office
  */
-export default function OfficeFurniture({ agentPositions = {}, agents = [] }) {
+export default function OfficeFurniture({ agentPositions = {}, agents = [], agentStates = {} }) {
   const agentStatusMap = useMemo(() => {
     const map = {};
     agents.forEach(a => { map[a.id] = a.status; });
@@ -296,24 +346,44 @@ export default function OfficeFurniture({ agentPositions = {}, agents = [] }) {
 
   const pois = useMemo(() => buildPOIs(VENTURES), []);
 
+  // Detect which POIs are currently occupied (any agent within 1.5 units)
+  const poiActivity = useMemo(() => {
+    const activity = {};
+    const checkPOI = (key, poi) => {
+      const occupied = Object.values(agentStates).some(s => {
+        if (!s.position) return false;
+        const d = Math.hypot(s.position[0] - poi.x, s.position[2] - poi.z);
+        return d < 1.5;
+      });
+      activity[key] = occupied;
+    };
+    Object.entries(pois.byVenture).forEach(([k, p]) => {
+      checkPOI(`wb-${k}`, p.whiteboard);
+      checkPOI(`cf-${k}`, p.coffee);
+    });
+    return activity;
+  }, [agentStates, pois]);
+
   const whiteboards = useMemo(() => {
     return Object.entries(pois.byVenture).map(([ventureKey, p]) => (
       <Whiteboard
         key={`wb-${ventureKey}`}
         position={[p.whiteboard.x, 0, p.whiteboard.z]}
         color={VENTURES[ventureKey]?.color || '#00D4FF'}
+        active={poiActivity[`wb-${ventureKey}`]}
       />
     ));
-  }, [pois]);
+  }, [pois, poiActivity]);
 
   const coffeeMachines = useMemo(() => {
     return Object.entries(pois.byVenture).map(([ventureKey, p]) => (
       <CoffeeMachine
         key={`cf-${ventureKey}`}
         position={[p.coffee.x, 0, p.coffee.z]}
+        active={poiActivity[`cf-${ventureKey}`]}
       />
     ));
-  }, [pois]);
+  }, [pois, poiActivity]);
 
   return (
     <group>

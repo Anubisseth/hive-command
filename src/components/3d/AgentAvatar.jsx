@@ -2,10 +2,11 @@
 // Retro-style agent characters with status effects
 // Reliable click detection with drag-vs-click differentiation
 
-import { useRef, useMemo, useState, useCallback } from 'react';
+import { useRef, useMemo, useState, useCallback, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import { TIERS, STATUSES, VENTURES } from '../../data/constants';
+import { pickDialogueSnippet } from '../../lib/dialogue';
 
 const STATUS_COLORS = {
   active:    '#00FF88',
@@ -41,6 +42,7 @@ export default function AgentAvatar({
   const bodyRef = useRef();
   const headRef = useRef();
   const [hovered, setHovered] = useState(false);
+  const [dialogue, setDialogue] = useState(null);
   const pointerDownPos = useRef(null);
 
   const statusColor = STATUS_COLORS[agent.status] || STATUS_COLORS.offline;
@@ -52,6 +54,15 @@ export default function AgentAvatar({
   const isWorking = behavior === 'working';
   const isWalking = behavior === 'walking';
   const isTalking = behavior === 'talking';
+
+  // Pick a fresh dialogue snippet whenever a new talking session starts
+  useEffect(() => {
+    if (isTalking && talkPartnerId) {
+      setDialogue(pickDialogueSnippet(agent, null));
+    } else {
+      setDialogue(null);
+    }
+  }, [isTalking, talkPartnerId, agent]);
 
   // Track pointer-down position for click-vs-drag detection
   const handlePointerDown = useCallback((e) => {
@@ -233,6 +244,75 @@ export default function AgentAvatar({
             <meshBasicMaterial color={TIERS[agent.tier]?.color || '#FFB800'} />
           </mesh>
         )}
+
+        {/* Tier-specific accessory */}
+        {agent.tier === 0 && (
+          <>
+            {/* Commander crown on head */}
+            <mesh position={[0, 0.62, 0]}>
+              <coneGeometry args={[0.13, 0.16, 5]} />
+              <meshStandardMaterial color="#FFB800" metalness={0.85} roughness={0.2} emissive="#FFB800" emissiveIntensity={0.3} />
+            </mesh>
+            {/* Crown gem */}
+            <mesh position={[0, 0.7, 0]}>
+              <octahedronGeometry args={[0.04, 0]} />
+              <meshStandardMaterial color="#FF3344" emissive="#FF3344" emissiveIntensity={0.6} />
+            </mesh>
+            {/* Cape (back of body) */}
+            <mesh position={[0, -0.05, -0.18]} rotation={[0.1, 0, 0]}>
+              <coneGeometry args={[0.22, 0.55, 6, 1, true]} />
+              <meshStandardMaterial color="#7C2D12" roughness={0.85} side={2} />
+            </mesh>
+          </>
+        )}
+        {agent.tier === 1 && (
+          <>
+            {/* Director briefcase in hand */}
+            <mesh position={[0.22, -0.05, 0]} castShadow>
+              <boxGeometry args={[0.14, 0.1, 0.05]} />
+              <meshStandardMaterial color="#2A1810" roughness={0.5} metalness={0.4} />
+            </mesh>
+            {/* Briefcase handle */}
+            <mesh position={[0.22, 0.02, 0]}>
+              <torusGeometry args={[0.025, 0.008, 4, 8, Math.PI]} />
+              <meshStandardMaterial color="#D4A574" metalness={0.7} roughness={0.3} />
+            </mesh>
+            {/* Shoulder pads */}
+            <mesh position={[-0.18, 0.22, 0]}>
+              <boxGeometry args={[0.06, 0.05, 0.16]} />
+              <meshStandardMaterial color={ventureColor} roughness={0.4} metalness={0.5} />
+            </mesh>
+            <mesh position={[0.18, 0.22, 0]}>
+              <boxGeometry args={[0.06, 0.05, 0.16]} />
+              <meshStandardMaterial color={ventureColor} roughness={0.4} metalness={0.5} />
+            </mesh>
+          </>
+        )}
+        {agent.tier === 2 && (
+          <>
+            {/* Manager headset (band over head) */}
+            <mesh position={[0, 0.56, 0]} rotation={[Math.PI / 2, 0, 0]}>
+              <torusGeometry args={[0.17, 0.012, 4, 12, Math.PI]} />
+              <meshStandardMaterial color="#2A3448" metalness={0.6} roughness={0.4} />
+            </mesh>
+            {/* Mic boom */}
+            <mesh position={[0.12, 0.42, 0.05]} rotation={[0, 0, -Math.PI / 4]}>
+              <cylinderGeometry args={[0.005, 0.005, 0.12, 4]} />
+              <meshStandardMaterial color="#2A3448" />
+            </mesh>
+            <mesh position={[0.16, 0.36, 0.08]}>
+              <sphereGeometry args={[0.018, 6, 6]} />
+              <meshBasicMaterial color={statusColor} />
+            </mesh>
+          </>
+        )}
+        {agent.tier === 3 && isWorking && (
+          /* Tier-3 worker: tablet/clipboard in hand when working */
+          <mesh position={[0.18, 0, 0.15]} rotation={[0.3, 0.4, 0]} castShadow>
+            <boxGeometry args={[0.12, 0.16, 0.01]} />
+            <meshBasicMaterial color={statusColor} transparent opacity={0.6} />
+          </mesh>
+        )}
       </group>
 
       {/* Status ring on ground */}
@@ -279,10 +359,50 @@ export default function AgentAvatar({
         </mesh>
       )}
 
-      {/* Persistent task speech bubble — shows whenever the agent has an active task */}
-      {agent.task && !hovered && !isSelected && (
+      {/* Talking dialogue bubble — overrides task bubble when talking */}
+      {dialogue && !hovered && !isSelected && (
         <Html
-          position={[0, 1.4, 0]}
+          position={[0, 1.55 + (3 - agent.tier) * 0.05, 0]}
+          center
+          distanceFactor={18}
+          style={{ pointerEvents: 'none' }}
+        >
+          <div className="hive-speech-bubble" style={{
+            background: 'rgba(10, 14, 20, 0.95)',
+            border: `1px solid #00FF88`,
+            borderRadius: '12px',
+            padding: '4px 8px',
+            maxWidth: '180px',
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: '8px',
+            color: '#00FF88',
+            boxShadow: `0 0 10px #00FF8855`,
+            backdropFilter: 'blur(6px)',
+            position: 'relative',
+            animation: 'hive-bubble-float 2.5s ease-in-out infinite',
+          }}>
+            <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {dialogue}
+            </div>
+            <div style={{
+              position: 'absolute',
+              bottom: '-4px',
+              left: '50%',
+              marginLeft: '-4px',
+              width: 0, height: 0,
+              borderLeft: '4px solid transparent',
+              borderRight: '4px solid transparent',
+              borderTop: `4px solid #00FF88`,
+            }} />
+          </div>
+        </Html>
+      )}
+
+      {/* Persistent task speech bubble — shows whenever the agent has an active task and isn't talking */}
+      {agent.task && !dialogue && !hovered && !isSelected && (
+        <Html
+          // Stagger Y by tier so clustered bubbles don't all overlap
+          position={[0, 1.4 + (3 - agent.tier) * 0.18, 0]}
           center
           distanceFactor={18}
           style={{ pointerEvents: 'none' }}

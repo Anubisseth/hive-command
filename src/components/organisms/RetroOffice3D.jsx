@@ -213,7 +213,7 @@ function OfficeScene({ agents, onAgentClick, selectedAgentId, cameraPreset, show
       <OfficeEnvironment />
       <CameraController preset={cameraPreset} followTarget={followTarget} />
       <OfficeFloor />
-      <OfficeFurniture agentPositions={deskPositions} agents={agents} />
+      <OfficeFurniture agentPositions={deskPositions} agents={agents} agentStates={agentStates} />
 
       {/* Render all agents */}
       {agents.map(agent => {
