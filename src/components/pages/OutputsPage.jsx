@@ -5,7 +5,7 @@ import { VENTURES } from '../../data/constants';
 import useAgentStore from '../../store/agentStore';
 import GlowButton from '../atoms/GlowButton';
 import VentureBadge from '../atoms/VentureBadge';
-import { logActivity, updateOutputStatus, isAirtableConfigured } from '../../lib/airtable';
+import { logActivity, updateOutputStatus, createOutput, isAirtableConfigured } from '../../lib/airtable';
 import { exportToPDF, exportToDOCX, exportViaEmail } from '../../lib/exportOutput';
 import { generateImage } from '../../lib/llmClient';
 
@@ -109,14 +109,41 @@ export default function OutputsPage() {
         imageUrl: result.content,
         provider: result.provider,
       };
-      // Add to local list (whether or not Airtable is configured)
+
+      // Add to local store immediately for instant feedback
       if (airtableOutputs) {
-        // Add to store
-        const addOutput = useAgentStore.getState().addOutput;
-        addOutput(newOutput);
+        useAgentStore.getState().addOutput(newOutput);
       } else {
         setLocalOutputs(prev => [newOutput, ...prev]);
       }
+
+      // Persist to Airtable so the image survives the next sync poll.
+      // The URL field in Airtable holds the image (Gemini data: URI or DALL-E HTTPS URL).
+      if (isAirtableConfigured()) {
+        createOutput({
+          title: newOutput.title,
+          type: 'image',
+          agentId: newOutput.agentId,
+          status: 'pending_review',
+          content: prompt,         // store the prompt as text content for searchability
+          url: result.content,     // image URL / data URI
+          venture: 'cross',
+        }).then(record => {
+          // Backfill the Airtable record ID so approve/reject etc. can sync
+          if (record?.id) {
+            useAgentStore.getState().updateOutputInStore(newOutput.id, { _recordId: record.id });
+          }
+        }).catch(err => console.error('[OutputsPage] Failed to persist image to Airtable:', err));
+
+        logActivity({
+          event: `Image generated: ${newOutput.title}`,
+          agentId: 'ai_studio',
+          eventType: 'output_created',
+          venture: 'cross',
+          details: `Generated via ${result.provider}`,
+        }).catch(() => {});
+      }
+
       setGenPrompt('');
     } catch (err) {
       alert(`Image generation failed: ${err.message}\n\nMake sure GEMINI_API_KEY or OPENAI_API_KEY is set on your Vercel project (Settings → Env Vars).`);

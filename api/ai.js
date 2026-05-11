@@ -1,7 +1,18 @@
 // =============================================
 // HIVE COMMAND — AI API Proxy
-// Server-side proxy for LLM calls (Ollama/Claude/OpenAI)
-// Keeps API keys hidden from browser
+// Server-side proxy for LLM calls (Ollama/Claude/OpenAI/Gemini)
+// Keeps API keys hidden from browser.
+//
+// Security posture:
+//  - HIVE_ACCESS_TOKEN: when set, every request must carry matching X-Hive-Token.
+//    When unset (dev only), requests are accepted; logs a warning each call.
+//  - ALLOWED_ORIGIN: when set, used verbatim. When unset, '*' is allowed for
+//    local dev — DO NOT leave this unset in production.
+//  - Rate limit: 30 chat/generate per minute per IP, 5 image/min per IP (image
+//    gen is the wallet-risk vector — tight limit).
+//  - Provider errors are surfaced as a sanitized status + provider name only;
+//    raw error bodies are logged server-side, never returned to the caller
+//    (they can contain partial keys and request bodies).
 // =============================================
 
 // Server-side only env vars (no VITE_ prefix)
@@ -10,24 +21,68 @@ const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
 const OPENAI_KEY = process.env.OPENAI_API_KEY;
 const GEMINI_KEY = process.env.GEMINI_API_KEY;
 
+// Rate limit windows: chat/generate vs image (separate buckets)
+const RATE_LIMIT_WINDOW = 60_000; // 1 minute
+const RATE_LIMIT_MAX_CHAT = 30;
+const RATE_LIMIT_MAX_IMAGE = 5;
+const chatLimitMap = new Map();
+const imageLimitMap = new Map();
+
+function rateLimitCheck(ip, action) {
+  const map = action === 'generateImage' ? imageLimitMap : chatLimitMap;
+  const max = action === 'generateImage' ? RATE_LIMIT_MAX_IMAGE : RATE_LIMIT_MAX_CHAT;
+  const now = Date.now();
+  const entry = map.get(ip);
+  if (!entry || now - entry.start > RATE_LIMIT_WINDOW) {
+    map.set(ip, { start: now, count: 1 });
+    return { ok: true };
+  }
+  if (entry.count >= max) {
+    const retryAfter = Math.ceil((entry.start + RATE_LIMIT_WINDOW - now) / 1000);
+    return { ok: false, retryAfter, max };
+  }
+  entry.count++;
+  return { ok: true };
+}
+
 function authenticate(req) {
   const token = req.headers['x-hive-token'];
   const validToken = process.env.HIVE_ACCESS_TOKEN;
-  if (!validToken) return true;
+  if (!validToken) {
+    // Dev-only fallback. In production, set HIVE_ACCESS_TOKEN.
+    console.warn('[AI Proxy] HIVE_ACCESS_TOKEN not set — request accepted without auth. Set this env var in production.');
+    return true;
+  }
   return token === validToken;
 }
 
+function sanitizeProviderError(provider, status) {
+  // Return only provider name + numeric status code. Never the body.
+  return `${provider} provider error (status ${status})`;
+}
+
 export default async function handler(req, res) {
-  // CORS
-  res.setHeader('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
+  // CORS — restrict to ALLOWED_ORIGIN in production
+  const allowedOrigin = process.env.ALLOWED_ORIGIN || '*';
+  res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Hive-Token');
+  res.setHeader('Vary', 'Origin');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
   if (!authenticate(req)) {
-    return res.status(401).json({ error: 'Unauthorized' });
+    return res.status(401).json({ error: 'Unauthorized. Provide valid X-Hive-Token header.' });
+  }
+
+  // Rate limit per IP per action
+  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
+  const action = req.body?.action || 'chat';
+  const rl = rateLimitCheck(ip, action);
+  if (!rl.ok) {
+    res.setHeader('Retry-After', String(rl.retryAfter));
+    return res.status(429).json({ error: `Rate limit exceeded. Max ${rl.max} ${action} requests per minute. Retry in ${rl.retryAfter}s.` });
   }
 
   try {
@@ -66,11 +121,14 @@ export default async function handler(req, res) {
                 usage: { inputTokens: data.usageMetadata?.promptTokenCount || 0, outputTokens: data.usageMetadata?.candidatesTokenCount || 0 },
               });
             }
+            console.warn('[AI Proxy] Gemini returned no image data — falling through to OpenAI');
+          } else {
+            const body = await geminiRes.text().catch(() => '');
+            console.warn(`[AI Proxy] Gemini image failed (${geminiRes.status}): ${body.slice(0, 200)}`);
           }
-          // Otherwise fall through to OpenAI
         } catch (err) {
           if (err.name === 'AbortError') return res.status(504).json({ error: 'Gemini image timeout' });
-          // Fall through
+          console.warn('[AI Proxy] Gemini image exception:', err.message);
         }
       }
 
@@ -89,8 +147,9 @@ export default async function handler(req, res) {
           signal: AbortSignal.timeout(60000),
         });
         if (!openaiRes.ok) {
-          const err = await openaiRes.text().catch(() => '');
-          return res.status(openaiRes.status).json({ error: `OpenAI image ${openaiRes.status}: ${err}` });
+          const body = await openaiRes.text().catch(() => '');
+          console.error(`[AI Proxy] OpenAI image error (${openaiRes.status}): ${body.slice(0, 200)}`);
+          return res.status(openaiRes.status).json({ error: sanitizeProviderError('openai-image', openaiRes.status) });
         }
         const data = await openaiRes.json();
         return res.status(200).json({
@@ -120,7 +179,9 @@ export default async function handler(req, res) {
       });
 
       if (!ollamaRes.ok) {
-        return res.status(ollamaRes.status).json({ error: `Ollama ${ollamaRes.status}` });
+        const body = await ollamaRes.text().catch(() => '');
+        console.error(`[AI Proxy] Ollama error (${ollamaRes.status}): ${body.slice(0, 200)}`);
+        return res.status(ollamaRes.status).json({ error: sanitizeProviderError('ollama', ollamaRes.status) });
       }
 
       const data = await ollamaRes.json();
@@ -156,8 +217,9 @@ export default async function handler(req, res) {
       });
 
       if (!claudeRes.ok) {
-        const err = await claudeRes.text().catch(() => '');
-        return res.status(claudeRes.status).json({ error: `Claude ${claudeRes.status}: ${err}` });
+        const body = await claudeRes.text().catch(() => '');
+        console.error(`[AI Proxy] Anthropic error (${claudeRes.status}): ${body.slice(0, 200)}`);
+        return res.status(claudeRes.status).json({ error: sanitizeProviderError('anthropic', claudeRes.status) });
       }
 
       const data = await claudeRes.json();
@@ -197,8 +259,9 @@ export default async function handler(req, res) {
       });
 
       if (!openaiRes.ok) {
-        const err = await openaiRes.text().catch(() => '');
-        return res.status(openaiRes.status).json({ error: `OpenAI ${openaiRes.status}: ${err}` });
+        const body = await openaiRes.text().catch(() => '');
+        console.error(`[AI Proxy] OpenAI error (${openaiRes.status}): ${body.slice(0, 200)}`);
+        return res.status(openaiRes.status).json({ error: sanitizeProviderError('openai', openaiRes.status) });
       }
 
       const data = await openaiRes.json();

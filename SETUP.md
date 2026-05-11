@@ -36,15 +36,48 @@ Then open `.env` and fill in:
 
 If you skip these, the dashboard runs in "local data" mode without AI assistance.
 
+There are **two layers** of AI env vars in this project:
+
+**(a) Client-side (VITE_*)** — inlined into the browser bundle. Visible to anyone who opens DevTools. Only use these for dev/local Ollama URLs or when you've accepted the exposure risk.
+
+**(b) Server-side (no VITE_ prefix)** — read by the `/api/ai` Vercel serverless function. **Never sent to the browser.** This is the safe path for production.
+
+The `/api/ai` proxy tries providers in this order: **Anthropic → OpenAI → Ollama** for chat/generate, **Gemini → OpenAI DALL-E 3** for image generation. It returns whichever first succeeds.
+
+#### Server-side (recommended for production)
+
+Set these in **Vercel → Project Settings → Environment Variables** (not in your local `.env` unless you want the local dev server to use them via `vercel dev`).
+
+| Variable                | Purpose                                                                  |
+| ----------------------- | ------------------------------------------------------------------------ |
+| `HIVE_ACCESS_TOKEN`     | **Required for production.** Random string. Browser must send it as `X-Hive-Token` header. Without this set, `/api/ai` accepts anonymous calls — anyone can rack up your AI bill. |
+| `ALLOWED_ORIGIN`        | **Required for production.** e.g. `https://hive-command-lemon.vercel.app`. Without this, CORS defaults to `*`. |
+| `ANTHROPIC_API_KEY`     | Claude API key. Used by Commander Loop for decompose / execute / review phases. |
+| `OPENAI_API_KEY`        | OpenAI API key. Used as chat fallback AND for DALL-E 3 image generation. |
+| `GEMINI_API_KEY`        | Google AI key for Gemini 2.5 Flash Image (Nano Banana). Primary image-gen provider when set. Get at https://aistudio.google.com/app/apikey |
+| `OLLAMA_URL`            | Default `http://localhost:11434`. Override if your Ollama is on another host. |
+
+#### Client-side (visible in bundle)
+
+Only `VITE_*`-prefixed vars are usable in browser code. The dashboard reads these for UI labels and the optional client-direct fallback path.
+
 | Variable                    | Notes                                                                  |
 | --------------------------- | ---------------------------------------------------------------------- |
-| `VITE_OLLAMA_URL`           | Default `http://localhost:11434`. Install Ollama, then `ollama pull llama3.2` |
+| `VITE_OLLAMA_URL`           | Used by the `useOllama` direct-call path. Default `http://localhost:11434` |
 | `VITE_OLLAMA_MODEL`         | Default `llama3.2`                                                     |
-| `VITE_OPENAI_API_KEY`       | Used as cloud fallback if Ollama is unreachable                        |
-| `VITE_ANTHROPIC_API_KEY`    | Used by the Commander autonomous loop                                  |
-| `VITE_ANTHROPIC_MODEL`      | Default `claude-sonnet-4-20250514`                                     |
+| `VITE_ANTHROPIC_MODEL`      | Default `claude-sonnet-4-20250514`. Used as the UI's "default model" hint. |
+| `VITE_OPENAI_MODEL`         | Default `gpt-4o-mini`                                                  |
+| `VITE_HIVE_ACCESS_TOKEN`    | If you set `HIVE_ACCESS_TOKEN` server-side, set the **same value** here too so the browser sends it. Yes, this exposes the token client-side — that's fine if its only job is rate-limit gating, not real secrets. |
 
-> ⚠️ **Security note:** `VITE_*` env vars are inlined into the browser bundle. Treat any key you put here as **client-side exposed** — fine for trusted internal tools, **not safe for public deployments**. For production, route AI calls through a server (or Vercel function) that keeps the key server-side.
+### Rate limits on `/api/ai` (built in)
+
+The proxy applies per-IP rate limits in memory:
+- **30 requests/min** for chat and generate actions
+- **5 requests/min** for `generateImage` (image gen is the wallet-risk path)
+
+These reset per cold-start of the serverless function. If you need stronger limits, layer Vercel Firewall or a third-party WAF in front.
+
+> ⚠️ **Why this matters:** `VITE_*` env vars are inlined into the browser bundle. Treat any key prefixed `VITE_` as **publicly exposed**. Don't use them for production AI calls — route through `/api/ai` with server-side keys instead.
 
 ## 3. Create the Airtable base
 

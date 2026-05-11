@@ -58,12 +58,24 @@ export default function useAirtableSync() {
 
       if (!mountedRef.current) return;
 
-      // Honor active-template flag: if a template is loaded, don't overwrite agents
+      // Honor active-template flag: when a template is loaded, ALL 5 tables
+      // are paused so we don't end up with directives/tasks/outputs referencing
+      // agent IDs that don't exist in the template.
       let templateActive = false;
       try { templateActive = !!localStorage.getItem('hive-active-template'); } catch {}
 
+      if (templateActive) {
+        // Still mark the sync as "alive" so the UI doesn't go stale,
+        // but don't overwrite any slice.
+        setDataSource('template');
+        setLastSync(new Date());
+        failCountRef.current = 0;
+        scheduleNext(BASE_INTERVAL);
+        return;
+      }
+
       // Update each store slice if data was returned
-      if (agents && agents.length > 0 && !templateActive) {
+      if (agents && agents.length > 0) {
         setAgents(agents);
         setDataSource('airtable');
       }
