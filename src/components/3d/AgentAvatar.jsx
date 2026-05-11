@@ -224,7 +224,47 @@ export default function AgentAvatar({
         </mesh>
       )}
 
-      {/* Hover label */}
+      {/* Persistent task speech bubble — shows whenever the agent has an active task */}
+      {agent.task && !hovered && !isSelected && (
+        <Html
+          position={[0, 1.4, 0]}
+          center
+          distanceFactor={18}
+          style={{ pointerEvents: 'none' }}
+        >
+          <div className="hive-speech-bubble" style={{
+            background: 'rgba(10, 14, 20, 0.85)',
+            border: `1px solid ${statusColor}80`,
+            borderRadius: '12px',
+            padding: '4px 8px',
+            maxWidth: '160px',
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: '8px',
+            color: '#00D4FF',
+            boxShadow: `0 0 8px ${statusColor}40`,
+            backdropFilter: 'blur(6px)',
+            position: 'relative',
+            animation: 'hive-bubble-float 3s ease-in-out infinite',
+          }}>
+            <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {agent.task.description}
+            </div>
+            {/* Tail */}
+            <div style={{
+              position: 'absolute',
+              bottom: '-4px',
+              left: '50%',
+              marginLeft: '-4px',
+              width: 0, height: 0,
+              borderLeft: '4px solid transparent',
+              borderRight: '4px solid transparent',
+              borderTop: `4px solid ${statusColor}80`,
+            }} />
+          </div>
+        </Html>
+      )}
+
+      {/* Hover / selection full info card */}
       {(hovered || isSelected) && (
         <Html
           position={[0, 1.5, 0]}
@@ -250,6 +290,11 @@ export default function AgentAvatar({
             <div style={{ color: '#9CA3AF', fontSize: '8px', letterSpacing: '0.15em' }}>
               {TIERS[agent.tier]?.label || 'AGENT'} &bull; {(agent.status || 'offline').toUpperCase()}
             </div>
+            {agent.model && (
+              <div style={{ color: '#8B5CF6', fontSize: '8px', marginTop: '2px', letterSpacing: '0.1em' }}>
+                MODEL: {agent.model}
+              </div>
+            )}
             {agent.task && (
               <div style={{ color: '#00D4FF', fontSize: '8px', marginTop: '3px', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {agent.task.description}

@@ -2,10 +2,11 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Trash2, AlertTriangle } from 'lucide-react';
+import { X, Trash2, AlertTriangle, Cpu } from 'lucide-react';
 import GlowButton from '../atoms/GlowButton';
 import { modalOverlay, modalContent } from '../../motion/variants';
 import { TIERS, STATUSES, VENTURES, TOOL_COLORS } from '../../data/constants';
+import { MODEL_CATALOG, TIER_COLORS as MODEL_TIER_COLORS } from '../../lib/aiPricing';
 
 const TIER_OPTIONS = [
   { value: 0, label: 'Commander', prefix: 'cmd_' },
@@ -45,6 +46,7 @@ export default function AgentFormModal({ mode = 'create', agent = null, agents =
     steps: '',
     deliverables: '',
     tools: [],
+    model: '',
   });
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -65,6 +67,7 @@ export default function AgentFormModal({ mode = 'create', agent = null, agents =
         steps: Array.isArray(agent.steps) ? agent.steps.join('\n') : (agent.steps || ''),
         deliverables: Array.isArray(agent.deliverables) ? agent.deliverables.join(', ') : (agent.deliverables || ''),
         tools: agent.tools || [],
+        model: agent.model || '',
       });
     }
   }, [isEdit, agent]);
@@ -121,6 +124,7 @@ export default function AgentFormModal({ mode = 'create', agent = null, agents =
       steps: form.steps.split('\n').map(s => s.trim()).filter(Boolean),
       deliverables: form.deliverables.split(',').map(s => s.trim()).filter(Boolean),
       tools: form.tools,
+      model: form.model || null,
       task: isEdit ? (agent?.task || null) : null,
     };
 
@@ -321,6 +325,35 @@ export default function AgentFormModal({ mode = 'create', agent = null, agents =
                   style={inputStyle}
                   placeholder="Reports, Dashboards, Alerts"
                 />
+              </FieldGroup>
+
+              {/* AI Model */}
+              <FieldGroup label="AI MODEL" hint="Overrides global default for this agent">
+                <div className="flex items-center gap-2">
+                  <Cpu size={12} style={{ color: form.model ? MODEL_TIER_COLORS[MODEL_CATALOG[form.model]?.tier] || '#9CA3AF' : '#6B7280' }} />
+                  <select
+                    value={form.model}
+                    onChange={e => update('model', e.target.value)}
+                    style={{ ...inputStyle, flex: 1 }}
+                  >
+                    <option value="">Use global default</option>
+                    <optgroup label="Anthropic (Claude)">
+                      {Object.entries(MODEL_CATALOG).filter(([, m]) => m.provider === 'anthropic').map(([id, m]) => (
+                        <option key={id} value={id}>{m.label} — ${m.input}/${m.output} per M</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="OpenAI">
+                      {Object.entries(MODEL_CATALOG).filter(([, m]) => m.provider === 'openai').map(([id, m]) => (
+                        <option key={id} value={id}>{m.label} — ${m.input}/${m.output} per M</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Ollama (Local — Free)">
+                      {Object.entries(MODEL_CATALOG).filter(([, m]) => m.provider === 'ollama').map(([id, m]) => (
+                        <option key={id} value={id}>{m.label}</option>
+                      ))}
+                    </optgroup>
+                  </select>
+                </div>
               </FieldGroup>
 
               {/* Tools */}

@@ -1,10 +1,24 @@
 // === HIVE COMMAND — Unified LLM Client ===
 // Routes through /api/ai proxy with fallback chain: Claude → OpenAI → Ollama
 
+import { calculateCost, MODEL_CATALOG } from './aiPricing';
+
 const PROVIDERS = ['anthropic', 'openai', 'ollama'];
 const DEFAULT_TIMEOUT = 60000;
 const MAX_RETRIES = 3;
 const RETRY_BASE_DELAY = 2000;
+
+// Lazy-load the store so this module stays usable in non-React contexts.
+function recordUsageToStore(payload) {
+  try {
+    const store = window.__hiveStore;
+    if (store && typeof store.getState === 'function') {
+      store.getState().recordAiCall?.(payload);
+    }
+  } catch {
+    /* swallow — usage logging is non-critical */
+  }
+}
 
 /**
  * Call the LLM through the server-side proxy.
@@ -18,14 +32,36 @@ const RETRY_BASE_DELAY = 2000;
  * @param {AbortSignal} [params.signal] - AbortController signal for cancellation
  * @returns {Promise<{content: string, provider: string}>}
  */
-export async function callLLM({ system, messages, prompt, options = {}, signal }) {
+export async function callLLM({ system, messages, prompt, options = {}, signal, agentId, agentName }) {
   const errors = [];
 
-  for (const provider of PROVIDERS) {
+  // If caller specified a model, route to its provider first
+  const preferredProvider = options.model && MODEL_CATALOG[options.model]?.provider;
+  const ordered = preferredProvider
+    ? [preferredProvider, ...PROVIDERS.filter(p => p !== preferredProvider)]
+    : PROVIDERS;
+
+  for (const provider of ordered) {
     if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
 
     try {
       const result = await callWithRetry({ system, messages, prompt, options, signal, provider });
+
+      // Record usage to store (best-effort, non-blocking)
+      if (result.usage) {
+        const cost = calculateCost(result.model, result.usage.inputTokens, result.usage.outputTokens);
+        recordUsageToStore({
+          agentId: agentId || null,
+          agentName: agentName || null,
+          provider: result.provider,
+          model: result.model,
+          inputTokens: result.usage.inputTokens,
+          outputTokens: result.usage.outputTokens,
+          cost,
+          timestamp: Date.now(),
+        });
+      }
+
       return result;
     } catch (err) {
       if (err.name === 'AbortError') throw err;
@@ -117,7 +153,12 @@ async function callProvider({ system, messages, prompt, options, signal, provide
     }
 
     const data = await res.json();
-    return { content: data.content || '', provider: data.provider || provider };
+    return {
+      content: data.content || '',
+      provider: data.provider || provider,
+      model: data.model,
+      usage: data.usage,
+    };
   } finally {
     clearTimeout(timeout);
   }

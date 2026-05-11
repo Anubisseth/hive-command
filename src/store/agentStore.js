@@ -9,13 +9,7 @@ import { create } from 'zustand';
 import { useMemo } from 'react';
 import { agents as agentData } from '../data/agents';
 
-const SEED_NOTIFICATIONS = [
-  { id: 'n1', type: 'task_complete', message: 'Cold Email Agent completed batch 3/5', agentId: 'a_cem', time: '2026-03-29T10:30:00Z', read: false },
-  { id: 'n2', type: 'output_ready', message: 'Blog post draft ready for review', agentId: 'a_seo', time: '2026-03-29T09:15:00Z', read: false },
-  { id: 'n3', type: 'agent_status_change', message: 'Diamond Pricing Agent went idle', agentId: 'a_dia', time: '2026-03-29T08:00:00Z', read: false },
-  { id: 'n4', type: 'directive_issued', message: 'New directive deployed to Client Onboard', agentId: 'a_onb', time: '2026-03-28T14:00:00Z', read: true },
-  { id: 'n5', type: 'system', message: 'Airtable sync completed — 22 agents loaded', agentId: null, time: '2026-03-28T12:00:00Z', read: true },
-];
+const SEED_NOTIFICATIONS = [];
 
 const useAgentStore = create((set, get) => ({
   // Agent data — starts with local, can be replaced by Airtable
@@ -37,6 +31,54 @@ const useAgentStore = create((set, get) => ({
 
   // Notifications
   notifications: SEED_NOTIFICATIONS,
+
+  // ─── AI Usage Tracking ────────────────────────
+  // Aggregate counters + last 50 call history. Persists to localStorage.
+  aiUsage: (() => {
+    try {
+      const raw = localStorage.getItem('hive-ai-usage');
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return { totalCost: 0, totalInputTokens: 0, totalOutputTokens: 0, totalCalls: 0, perAgent: {}, perModel: {}, history: [] };
+  })(),
+
+  recordAiCall: (call) => set(state => {
+    const u = state.aiUsage;
+    const agentKey = call.agentId || '_unattributed';
+    const modelKey = call.model || 'unknown';
+    const next = {
+      totalCost: u.totalCost + (call.cost || 0),
+      totalInputTokens: u.totalInputTokens + (call.inputTokens || 0),
+      totalOutputTokens: u.totalOutputTokens + (call.outputTokens || 0),
+      totalCalls: u.totalCalls + 1,
+      perAgent: {
+        ...u.perAgent,
+        [agentKey]: {
+          cost: (u.perAgent[agentKey]?.cost || 0) + (call.cost || 0),
+          tokens: (u.perAgent[agentKey]?.tokens || 0) + (call.inputTokens || 0) + (call.outputTokens || 0),
+          calls: (u.perAgent[agentKey]?.calls || 0) + 1,
+          lastCallAt: call.timestamp,
+        },
+      },
+      perModel: {
+        ...u.perModel,
+        [modelKey]: {
+          cost: (u.perModel[modelKey]?.cost || 0) + (call.cost || 0),
+          tokens: (u.perModel[modelKey]?.tokens || 0) + (call.inputTokens || 0) + (call.outputTokens || 0),
+          calls: (u.perModel[modelKey]?.calls || 0) + 1,
+        },
+      },
+      history: [call, ...u.history].slice(0, 50),
+    };
+    try { localStorage.setItem('hive-ai-usage', JSON.stringify(next)); } catch {}
+    return { aiUsage: next };
+  }),
+
+  resetAiUsage: () => set(() => {
+    const fresh = { totalCost: 0, totalInputTokens: 0, totalOutputTokens: 0, totalCalls: 0, perAgent: {}, perModel: {}, history: [] };
+    try { localStorage.setItem('hive-ai-usage', JSON.stringify(fresh)); } catch {}
+    return { aiUsage: fresh };
+  }),
 
   // ─── Data Actions ────────────────────────────
   setAgents: (agents) => set({ agents }),
@@ -215,6 +257,15 @@ export function useNotifications() {
   const notifications = useAgentStore(s => s.notifications);
   const unreadCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications]);
   return { notifications, unreadCount };
+}
+
+// Expose store globally for non-React consumers (llmClient usage recording)
+if (typeof window !== 'undefined') {
+  window.__hiveStore = useAgentStore;
+}
+
+export function useAiUsage() {
+  return useAgentStore(s => s.aiUsage);
 }
 
 export default useAgentStore;

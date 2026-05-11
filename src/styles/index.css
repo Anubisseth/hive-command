@@ -424,3 +424,9 @@ html, body {
 .animate-spin {
   animation: spin 1s linear infinite;
 }
+
+/* 3D speech bubble float animation */
+@keyframes hive-bubble-float {
+  0%, 100% { transform: translateY(0); opacity: 0.85; }
+  50%      { transform: translateY(-3px); opacity: 1; }
+}

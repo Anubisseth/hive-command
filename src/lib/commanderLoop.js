@@ -46,6 +46,7 @@ class CommanderLoop {
     this.maxIterations = options.maxIterations || 10;
     this.delayMs = options.delayBetweenCalls || 2000;
     this.abortController = new AbortController();
+    this.agents = agents; // expose for _review to find the Commander
 
     this._emit('stateChange', 'RUNNING');
     this._emit('log', { message: `Commander Loop started — "${directive.title}"`, type: 'system' });
@@ -229,11 +230,14 @@ class CommanderLoop {
   // ─── Internal Phases ─────────────────────────────
 
   async _decompose(directive, agents) {
+    const commander = agents.find(a => a.tier === 0);
     const { content } = await callLLM({
       system: decomposeSystemPrompt(),
       messages: [{ role: 'user', content: decomposeUserPrompt(directive, agents) }],
-      options: { temperature: 0.5, maxTokens: 4096 },
+      options: { temperature: 0.5, maxTokens: 4096, model: commander?.model },
       signal: this.abortController?.signal,
+      agentId: commander?.id || 'cmd',
+      agentName: commander?.name || 'COMMANDER',
     });
 
     const tasks = extractJSON(content);
@@ -254,19 +258,24 @@ class CommanderLoop {
     const { content } = await callLLM({
       system: executeSystemPrompt(agent),
       messages: [{ role: 'user', content: executeUserPrompt(task, directive) }],
-      options: { temperature: 0.7, maxTokens: 4096 },
+      options: { temperature: 0.7, maxTokens: 4096, model: agent.model },
       signal: this.abortController?.signal,
+      agentId: agent.id,
+      agentName: agent.name,
     });
 
     return content;
   }
 
   async _review(directive, outputs) {
+    const commander = this.agents?.find?.(a => a.tier === 0);
     const { content } = await callLLM({
       system: reviewSystemPrompt(),
       messages: [{ role: 'user', content: reviewUserPrompt(directive, outputs) }],
-      options: { temperature: 0.4, maxTokens: 4096 },
+      options: { temperature: 0.4, maxTokens: 4096, model: commander?.model },
       signal: this.abortController?.signal,
+      agentId: commander?.id || 'cmd',
+      agentName: commander?.name || 'COMMANDER',
     });
 
     const review = extractJSON(content);

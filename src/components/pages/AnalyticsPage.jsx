@@ -1,9 +1,10 @@
 import { useMemo, useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { BarChart3, TrendingUp, Target, Activity, Settings as SettingsIcon } from 'lucide-react';
+import { BarChart3, TrendingUp, Target, Activity, Settings as SettingsIcon, DollarSign, Cpu } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { VENTURES, STATUSES } from '../../data/constants';
 import useAgentStore from '../../store/agentStore';
+import { MODEL_CATALOG, TIER_COLORS as MODEL_TIER_COLORS } from '../../lib/aiPricing';
 
 const GOAL_KEY = 'hive-cashflow-goal';
 
@@ -24,9 +25,28 @@ const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 export default function AnalyticsPage() {
   const agents = useAgentStore(s => s.agents);
   const tasks = useAgentStore(s => s.tasks);
+  const aiUsage = useAgentStore(s => s.aiUsage);
+  const resetAiUsage = useAgentStore(s => s.resetAiUsage);
   const [chartsReady, setChartsReady] = useState(false);
   const [goal, setGoal] = useState(() => loadGoal());
   const [editingGoal, setEditingGoal] = useState(false);
+
+  const totalTokens = (aiUsage?.totalInputTokens || 0) + (aiUsage?.totalOutputTokens || 0);
+  const fmtCost = (n) => n < 0.01 ? `$${n.toFixed(4)}` : `$${n.toFixed(2)}`;
+  const fmtTokens = (n) => n >= 1_000_000 ? `${(n / 1_000_000).toFixed(2)}M` : n >= 1_000 ? `${(n / 1_000).toFixed(1)}k` : `${n}`;
+
+  const perModelData = useMemo(() => {
+    return Object.entries(aiUsage?.perModel || {})
+      .map(([model, m]) => ({
+        name: MODEL_CATALOG[model]?.label || model,
+        cost: m.cost,
+        tokens: m.tokens,
+        calls: m.calls,
+        color: MODEL_TIER_COLORS[MODEL_CATALOG[model]?.tier] || '#6B7280',
+      }))
+      .sort((a, b) => b.cost - a.cost)
+      .slice(0, 6);
+  }, [aiUsage]);
 
   useEffect(() => {
     const id = requestAnimationFrame(() => setChartsReady(true));
@@ -112,11 +132,13 @@ export default function AnalyticsPage() {
         </h1>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3 mb-6">
         {[
           { label: 'TOTAL AGENTS', value: agents.length, icon: Activity, color: '#00FF88' },
           { label: 'ACTIVE NOW', value: agents.filter(a => a.status === 'active').length, icon: TrendingUp, color: '#00FF88' },
           { label: 'TASKS TODAY', value: tasksToday, icon: BarChart3, color: '#00D4FF' },
+          { label: 'AI SPEND', value: fmtCost(aiUsage?.totalCost || 0), icon: DollarSign, color: '#FFB800' },
+          { label: 'AI TOKENS', value: fmtTokens(totalTokens), icon: Cpu, color: '#8B5CF6' },
           { label: goal ? `${goal.daysTotal}-DAY TARGET` : 'CASHFLOW TARGET', value: goal ? `${pct}%` : '—', icon: Target, color: !goal ? '#6B7280' : pct >= dayPct ? '#00FF88' : '#FFB800' },
         ].map((kpi) => (
           <div key={kpi.label} className="animate-in p-4 rounded-lg" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
@@ -255,6 +277,71 @@ export default function AnalyticsPage() {
               </ResponsiveContainer>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* AI Usage Breakdown */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+        <div className="animate-in p-5 rounded-lg" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-display text-[12px] font-bold tracking-wider" style={{ color: '#FFB800' }}>
+              AI SPEND PER MODEL
+            </h3>
+            {aiUsage?.totalCalls > 0 && (
+              <button
+                onClick={() => { if (confirm('Reset AI usage counters? This clears history but not your provider bill.')) resetAiUsage(); }}
+                className="text-[9px] tracking-wider"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                RESET
+              </button>
+            )}
+          </div>
+          <div className="h-48">
+            {chartsReady && perModelData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={perModelData} layout="vertical" margin={{ left: 20 }}>
+                  <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: '#6B7280', fontSize: 9, fontFamily: 'JetBrains Mono' }} tickFormatter={v => `$${v.toFixed(2)}`} />
+                  <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#9CA3AF', fontSize: 9, fontFamily: 'JetBrains Mono' }} width={120} />
+                  <Tooltip
+                    contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: 6, fontSize: 11, fontFamily: 'JetBrains Mono' }}
+                    formatter={(v, name, p) => [`$${v.toFixed(4)} • ${p.payload.calls} calls`, '']}
+                  />
+                  <Bar dataKey="cost" radius={[0, 3, 3, 0]}>
+                    {perModelData.map((entry, i) => (<Cell key={i} fill={entry.color} />))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-full font-system text-[11px]" style={{ color: 'var(--text-muted)' }}>
+                No AI calls recorded yet. Run the Commander Loop or use the AI assistant to populate this.
+              </div>
+            )}
+          </div>
+          <div className="mt-2 font-system text-[9px]" style={{ color: 'var(--text-muted)' }}>
+            Total: {aiUsage?.totalCalls || 0} calls · {fmtTokens(totalTokens)} tokens · {fmtCost(aiUsage?.totalCost || 0)}
+          </div>
+        </div>
+
+        <div className="animate-in p-5 rounded-lg" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)' }}>
+          <h3 className="font-display text-[12px] font-bold tracking-wider mb-4" style={{ color: '#8B5CF6' }}>
+            RECENT AI CALLS
+          </h3>
+          {aiUsage?.history?.length > 0 ? (
+            <div className="space-y-1 max-h-48 overflow-y-auto pr-1">
+              {aiUsage.history.slice(0, 12).map((call, i) => (
+                <div key={i} className="flex items-center justify-between gap-2 py-1 px-2 rounded font-system text-[10px]" style={{ background: 'rgba(255,255,255,0.02)', borderLeft: `2px solid ${MODEL_TIER_COLORS[MODEL_CATALOG[call.model]?.tier] || '#6B7280'}` }}>
+                  <span className="truncate" style={{ color: 'var(--text-secondary)' }}>{call.agentName || call.agentId || '—'}</span>
+                  <span style={{ color: 'var(--text-muted)' }}>{MODEL_CATALOG[call.model]?.label || call.model}</span>
+                  <span style={{ color: '#FFB800' }}>{fmtCost(call.cost)}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex items-center justify-center h-32 font-system text-[11px]" style={{ color: 'var(--text-muted)' }}>
+              No AI calls yet.
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -1,5 +1,5 @@
 import { useMemo, useCallback, useState, useEffect } from 'react';
-import { Crown, Briefcase, Settings, Bot } from 'lucide-react';
+import { Crown, Briefcase, Settings, Bot, Cpu } from 'lucide-react';
 import {
   ReactFlow,
   Background,
@@ -12,6 +12,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { TIERS, STATUSES, TOOL_COLORS } from '../../data/constants';
+import { MODEL_CATALOG, TIER_COLORS as MODEL_TIER_COLORS } from '../../lib/aiPricing';
 import useAgentStore, { useFilteredAgents } from '../../store/agentStore';
 
 /* ═══════════════════════════════════════════════════
@@ -138,6 +139,22 @@ function AgentNode({ data }) {
         </div>
       )}
 
+      {/* Model badge (if assigned) */}
+      {data.model && MODEL_CATALOG[data.model] && (
+        <div
+          className="flex items-center gap-1 mb-1.5 px-1.5 py-0.5 rounded font-system text-[7px] font-semibold tracking-wider w-fit"
+          style={{
+            background: `${MODEL_TIER_COLORS[MODEL_CATALOG[data.model].tier]}18`,
+            border: `1px solid ${MODEL_TIER_COLORS[MODEL_CATALOG[data.model].tier]}40`,
+            color: MODEL_TIER_COLORS[MODEL_CATALOG[data.model].tier],
+          }}
+          title={`${MODEL_CATALOG[data.model].label} · $${MODEL_CATALOG[data.model].input}/$${MODEL_CATALOG[data.model].output} per M tokens`}
+        >
+          <Cpu size={7} />
+          {MODEL_CATALOG[data.model].label.toUpperCase()}
+        </div>
+      )}
+
       {/* Tool squares */}
       <div className="flex gap-1 flex-wrap">
         {data.tools.slice(0, 5).map(tool => {
@@ -211,6 +228,7 @@ function buildNodesAndEdges(agents) {
           mandate: agent.mandate,
           tools: agent.tools,
           task: agent.task,
+          model: agent.model,
         },
       });
 

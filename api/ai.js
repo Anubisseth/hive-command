@@ -54,6 +54,11 @@ export default async function handler(req, res) {
       return res.status(200).json({
         provider: 'ollama',
         content: action === 'chat' ? data.message?.content : data.response,
+        model: options.model || 'llama3.2',
+        usage: {
+          inputTokens: data.prompt_eval_count || 0,
+          outputTokens: data.eval_count || 0,
+        },
       });
     }
 
@@ -86,6 +91,11 @@ export default async function handler(req, res) {
       return res.status(200).json({
         provider: 'anthropic',
         content: data.content?.[0]?.text || '',
+        model: data.model || options.model || 'claude-sonnet-4-20250514',
+        usage: {
+          inputTokens: data.usage?.input_tokens || 0,
+          outputTokens: data.usage?.output_tokens || 0,
+        },
       });
     }
 
@@ -122,6 +132,11 @@ export default async function handler(req, res) {
       return res.status(200).json({
         provider: 'openai',
         content: data.choices?.[0]?.message?.content || '',
+        model: data.model || options.model || 'gpt-4o-mini',
+        usage: {
+          inputTokens: data.usage?.prompt_tokens || 0,
+          outputTokens: data.usage?.completion_tokens || 0,
+        },
       });
     }
 
