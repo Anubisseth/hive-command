@@ -430,3 +430,24 @@ html, body {
   0%, 100% { transform: translateY(0); opacity: 0.85; }
   50%      { transform: translateY(-3px); opacity: 1; }
 }
+
+/* "JUST RECEIVED A DIRECTIVE" pulse — runs once for ~4s */
+@keyframes hive-directive-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(255, 184, 0, 0.65), 0 0 10px rgba(255, 184, 0, 0.25); }
+  25%  { box-shadow: 0 0 0 8px rgba(255, 184, 0, 0.0),  0 0 18px rgba(255, 184, 0, 0.55); }
+  50%  { box-shadow: 0 0 0 0 rgba(255, 184, 0, 0.55), 0 0 12px rgba(255, 184, 0, 0.35); }
+  75%  { box-shadow: 0 0 0 6px rgba(255, 184, 0, 0.0),  0 0 14px rgba(255, 184, 0, 0.45); }
+  100% { box-shadow: 0 0 0 0 rgba(255, 184, 0, 0.0),  0 0  8px rgba(255, 184, 0, 0.0); }
+}
+.hive-directive-pulse {
+  animation: hive-directive-pulse 4s ease-out 1 both;
+}
+
+/* RECEIVED chip blink */
+@keyframes hive-received-blink {
+  0%, 100% { opacity: 0.95; }
+  50%      { opacity: 0.55; }
+}
+.hive-received-chip {
+  animation: hive-received-blink 0.9s ease-in-out infinite;
+}

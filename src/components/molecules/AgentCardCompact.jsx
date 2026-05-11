@@ -1,4 +1,6 @@
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { Zap } from 'lucide-react';
 import StatusDot from '../atoms/StatusDot';
 import TierLabel from '../atoms/TierLabel';
 import VentureBadge from '../atoms/VentureBadge';
@@ -7,11 +9,26 @@ import ToolBadge from '../atoms/ToolBadge';
 import { TIERS } from '../../data/constants';
 import { cardHover } from '../../motion/variants';
 
+const PULSE_DURATION_MS = 4000;
+
 export default function AgentCardCompact({ agent, onClick }) {
   if (!agent) return null;
 
   const tier = TIERS[agent.tier] ?? TIERS[3];
   const tools = agent.tools || [];
+
+  // Track if the current task is "fresh" (received in the last 4s).
+  // Forces a re-render when the freshness window expires.
+  const [, setNow] = useState(Date.now());
+  const receivedAt = agent.task?.receivedAt;
+  const isFresh = receivedAt && Date.now() - receivedAt < PULSE_DURATION_MS;
+
+  useEffect(() => {
+    if (!isFresh) return;
+    const remaining = PULSE_DURATION_MS - (Date.now() - receivedAt);
+    const id = setTimeout(() => setNow(Date.now()), remaining + 50);
+    return () => clearTimeout(id);
+  }, [receivedAt, isFresh]);
 
   return (
     <motion.div
@@ -24,7 +41,7 @@ export default function AgentCardCompact({ agent, onClick }) {
       tabIndex={0}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick?.(agent.id); } }}
       aria-label={`View details for ${agent.name || 'agent'}`}
-      className="relative rounded-sm cursor-pointer overflow-hidden card-tactical card-accent-top p-4"
+      className={`relative rounded-sm cursor-pointer overflow-hidden card-tactical card-accent-top p-4 ${isFresh ? 'hive-directive-pulse' : ''}`}
     >
       {/* Top row: status + tier + venture */}
       <div className="flex items-center justify-between mb-2">
@@ -54,9 +71,19 @@ export default function AgentCardCompact({ agent, onClick }) {
       {/* Active task progress */}
       {agent.task && (
         <div className="mb-3">
-          <p className="font-system text-[9px] mb-1 truncate" style={{ color: 'var(--text-secondary)' }}>
-            {agent.task.description}
-          </p>
+          <div className="flex items-center gap-1.5 mb-1">
+            {isFresh && (
+              <span
+                className="hive-received-chip font-system text-[8px] font-bold tracking-widest px-1.5 py-0.5 rounded flex items-center gap-1"
+                style={{ background: 'rgba(255,184,0,0.15)', color: '#FFB800', border: '1px solid rgba(255,184,0,0.45)' }}
+              >
+                <Zap size={8} /> NEW DIRECTIVE
+              </span>
+            )}
+            <p className="font-system text-[9px] truncate flex-1" style={{ color: 'var(--text-secondary)' }}>
+              {agent.task.description}
+            </p>
+          </div>
           <ProgressBar value={agent.task.progress} showLabel={false} />
         </div>
       )}

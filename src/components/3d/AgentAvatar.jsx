@@ -58,6 +58,22 @@ export default function AgentAvatar({
   const isWalking = behavior === 'walking';
   const isTalking = behavior === 'talking';
 
+  // Track if the current task was received in the last 4s (NEW DIRECTIVE pulse).
+  const PULSE_MS = 4000;
+  const receivedAt = agent.task?.receivedAt;
+  const [now, setNow] = useState(() => Date.now());
+  const isFreshTask = receivedAt && now - receivedAt < PULSE_MS;
+  useEffect(() => {
+    if (!receivedAt) return;
+    const remaining = PULSE_MS - (Date.now() - receivedAt);
+    if (remaining <= 0) return;
+    const id = setTimeout(() => setNow(Date.now()), remaining + 50);
+    return () => clearTimeout(id);
+  }, [receivedAt]);
+
+  // Halo ref for animating the fresh-task ring
+  const haloRef = useRef();
+
   // Pick a fresh dialogue snippet whenever a new talking session starts
   useEffect(() => {
     if (isTalking && talkPartnerId) {
@@ -209,6 +225,13 @@ export default function AgentAvatar({
           }
         }
       }
+    }
+
+    // Pulse the fresh-task halo ring + scale the exclamation
+    if (haloRef.current && isFreshTask) {
+      const pulse = 1 + Math.sin(t * 6) * 0.15;
+      haloRef.current.scale.setScalar(pulse);
+      haloRef.current.material.opacity = 0.5 + Math.sin(t * 6) * 0.25;
     }
 
     // Fade & lift footstep dust over its lifetime
@@ -387,6 +410,28 @@ export default function AgentAvatar({
           <ringGeometry args={[0.4, 0.46, 16]} />
           <meshBasicMaterial color="#FFFFFF" transparent opacity={0.2} />
         </mesh>
+      )}
+
+      {/* NEW DIRECTIVE — floor halo ring + floating exclamation mark when freshly received */}
+      {isFreshTask && (
+        <>
+          <mesh ref={haloRef} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]}>
+            <ringGeometry args={[0.5, 0.75, 32]} />
+            <meshBasicMaterial color="#FFB800" transparent opacity={0.6} />
+          </mesh>
+          {/* Floating exclamation above head */}
+          <group position={[0, 1.25, 0]}>
+            <mesh>
+              <coneGeometry args={[0.06, 0.18, 6]} />
+              <meshBasicMaterial color="#FFB800" />
+            </mesh>
+            <mesh position={[0, -0.16, 0]}>
+              <sphereGeometry args={[0.04, 6, 6]} />
+              <meshBasicMaterial color="#FFB800" />
+            </mesh>
+          </group>
+          <pointLight position={[0, 1.4, 0]} color="#FFB800" intensity={1.5} distance={2.5} />
+        </>
       )}
 
       {/* Footstep dust particles (3 reusable, recycled on each footstep) */}

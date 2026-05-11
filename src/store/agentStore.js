@@ -125,8 +125,17 @@ const useAgentStore = create((set, get) => ({
   },
 
   updateAgentTask: (agentId, task) => {
+    // Stamp the task with receivedAt so views can show "JUST RECEIVED" pulses.
+    // If the same description is being kept (e.g. a progress update), preserve the original receivedAt.
     set(state => ({
-      agents: state.agents.map(a => a.id === agentId ? { ...a, task } : a),
+      agents: state.agents.map(a => {
+        if (a.id !== agentId) return a;
+        if (!task) return { ...a, task: null };
+        const prevTask = a.task;
+        const sameDescription = prevTask && prevTask.description === task.description;
+        const receivedAt = sameDescription ? prevTask.receivedAt : Date.now();
+        return { ...a, task: { ...task, receivedAt } };
+      }),
     }));
     const agent = get().agents.find(a => a.id === agentId);
     if (agent?._recordId) {

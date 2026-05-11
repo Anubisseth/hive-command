@@ -63,6 +63,20 @@ export function useCommanderLoop() {
 
       if (task.agentId) {
         agentActions().updateAgentStatus(task.agentId, 'active');
+        // Bind the task to the agent so it shows everywhere (3D bubble, grid card, graph node).
+        agentActions().updateAgentTask(task.agentId, {
+          description: task.title || task.description,
+          progress: 0,
+        });
+        // Push a notification — fixes the previously-empty bell icon.
+        agentActions().addNotification({
+          id: `n_${Date.now()}_${task.agentId}`,
+          type: 'directive_received',
+          message: `${task.agentName || task.agentId} received: ${task.title}`,
+          agentId: task.agentId,
+          time: new Date().toISOString(),
+          read: false,
+        });
       }
 
       import('../lib/airtable').then(({ createTask, logActivity }) => {
@@ -79,18 +93,54 @@ export function useCommanderLoop() {
     unsubs.push(commanderLoop.on('agentExecuting', ({ agentId, taskIndex, total }) => {
       if (!mountedRef.current) return;
       store().setExecutingAgent(agentId, taskIndex + 1, total);
+      // Bump task progress to ~50% so the UI shows "in progress" while the LLM call runs.
+      const agent = agentsRef.current.find(a => a.id === agentId);
+      if (agent?.task) {
+        agentActions().updateAgentTask(agentId, { ...agent.task, progress: 50 });
+      }
     }));
 
     unsubs.push(commanderLoop.on('agentComplete', ({ agentId }) => {
       if (!mountedRef.current) return;
       store().clearExecutingAgent();
-      agentActions().updateAgentStatus(agentId, 'idle');
+      agentActions().updateAgentStatus(agentId, 'reviewing');
+      const agent = agentsRef.current.find(a => a.id === agentId);
+      if (agent?.task) {
+        agentActions().updateAgentTask(agentId, { ...agent.task, progress: 100 });
+      }
+      agentActions().addNotification({
+        id: `n_${Date.now()}_${agentId}`,
+        type: 'task_completed',
+        message: `${agent?.name || agentId} completed the task`,
+        agentId,
+        time: new Date().toISOString(),
+        read: false,
+      });
+      // Clear the task ~3s later so the grid card stops showing the stale description.
+      setTimeout(() => {
+        if (mountedRef.current) {
+          const stillSameAgent = agentsRef.current.find(a => a.id === agentId);
+          if (stillSameAgent?.task) {
+            agentActions().updateAgentTask(agentId, null);
+          }
+          agentActions().updateAgentStatus(agentId, 'idle');
+        }
+      }, 3000);
     }));
 
-    unsubs.push(commanderLoop.on('agentError', ({ agentId }) => {
+    unsubs.push(commanderLoop.on('agentError', ({ agentId, error }) => {
       if (!mountedRef.current) return;
       store().clearExecutingAgent();
       agentActions().updateAgentStatus(agentId, 'blocked');
+      const agent = agentsRef.current.find(a => a.id === agentId);
+      agentActions().addNotification({
+        id: `n_${Date.now()}_${agentId}`,
+        type: 'error',
+        message: `${agent?.name || agentId} failed: ${error || 'unknown error'}`,
+        agentId,
+        time: new Date().toISOString(),
+        read: false,
+      });
     }));
 
     unsubs.push(commanderLoop.on('outputsCollected', (outputs) => {
@@ -108,6 +158,14 @@ export function useCommanderLoop() {
           venture: null,
         };
         agentActions().addOutput(outputRecord);
+        agentActions().addNotification({
+          id: `n_${Date.now()}_${output.agentId}_out`,
+          type: 'output_ready',
+          message: `Output ready for review: "${output.taskTitle}"`,
+          agentId: output.agentId,
+          time: new Date().toISOString(),
+          read: false,
+        });
 
         import('../lib/airtable').then(({ createOutput, logActivity }) => {
           createOutput(outputRecord).catch(() => {});

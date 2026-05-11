@@ -1,5 +1,5 @@
 import { useMemo, useCallback, useState, useEffect } from 'react';
-import { Crown, Briefcase, Settings, Bot, Cpu } from 'lucide-react';
+import { Crown, Briefcase, Settings, Bot, Cpu, Zap } from 'lucide-react';
 import {
   ReactFlow,
   Background,
@@ -21,17 +21,26 @@ import useAgentStore, { useFilteredAgents } from '../../store/agentStore';
 function AgentNode({ data }) {
   const tier = TIERS[data.tier] || TIERS[3];
   const status = STATUSES[data.status] || STATUSES.offline;
+  const PULSE_MS = 4000;
+  const isFresh = data.task?.receivedAt && Date.now() - data.task.receivedAt < PULSE_MS;
+  const [, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!isFresh) return;
+    const remaining = PULSE_MS - (Date.now() - data.task.receivedAt);
+    const id = setTimeout(() => setNow(Date.now()), remaining + 50);
+    return () => clearTimeout(id);
+  }, [isFresh, data.task?.receivedAt]);
 
   return (
     <div
-      className="rounded-sm cursor-grab active:cursor-grabbing"
+      className={`rounded-sm cursor-grab active:cursor-grabbing ${isFresh ? 'hive-directive-pulse' : ''}`}
       style={{
         background: 'linear-gradient(160deg, rgba(40, 32, 18, 0.95) 0%, rgba(28, 22, 12, 0.92) 100%)',
-        border: `1.5px solid ${tier.border}`,
+        border: `1.5px solid ${isFresh ? '#FFB800' : tier.border}`,
         padding: data.tier === 0 ? '16px 20px' : '12px 14px',
         minWidth: data.tier === 0 ? 280 : data.tier === 1 ? 220 : 190,
         maxWidth: data.tier === 0 ? 340 : data.tier === 1 ? 260 : 220,
-        boxShadow: `0 0 3px ${tier.color}30, 0 6px 28px rgba(0,0,0,0.7)`,
+        boxShadow: isFresh ? `0 0 14px rgba(255,184,0,0.55), 0 6px 28px rgba(0,0,0,0.7)` : `0 0 3px ${tier.color}30, 0 6px 28px rgba(0,0,0,0.7)`,
         backdropFilter: 'blur(6px)',
       }}
     >
@@ -123,9 +132,19 @@ function AgentNode({ data }) {
       {/* Task progress */}
       {data.task && (
         <div className="mb-2">
-          <p className="font-system text-[7px] mb-0.5 truncate" style={{ color: 'rgba(209,213,219,0.6)' }}>
-            {data.task.description}
-          </p>
+          <div className="flex items-center gap-1 mb-0.5">
+            {isFresh && (
+              <span
+                className="hive-received-chip font-system text-[6px] font-bold tracking-widest px-1 py-0.5 rounded flex items-center gap-0.5"
+                style={{ background: 'rgba(255,184,0,0.18)', color: '#FFB800', border: '1px solid rgba(255,184,0,0.5)' }}
+              >
+                <Zap size={6} /> NEW
+              </span>
+            )}
+            <p className="font-system text-[7px] truncate flex-1" style={{ color: 'rgba(209,213,219,0.6)' }}>
+              {data.task.description}
+            </p>
+          </div>
           <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
             <div
               className="h-full rounded-full"
